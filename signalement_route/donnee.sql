@@ -2,6 +2,17 @@ INSERT INTO role (libelle) VALUES
 ('manager'),
 ('admin');
 
+INSERT INTO user_ (email, password, nom, prenom, id_role, synced, firebase_uid) 
+VALUES (
+    'test@example.com',
+    'Test123!',
+    'Dupont',
+    'Jean',
+    (SELECT id_role FROM role WHERE libelle = 'USER'),
+    true,
+    'IuWrRfXBywchr1DgKDFobW4pQTQ2' -- À remplacer par un vrai UID
+);
+
 INSERT INTO province (province) VALUES
 ('Antananarivo');
 

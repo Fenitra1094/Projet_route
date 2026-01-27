@@ -1,10 +1,10 @@
 package com.example.back.models;
 
-
 import jakarta.persistence.*;
+import java.util.List;
 
 @Entity
-@Table(name = "user_") // correspond à ta table PostgreSQL
+@Table(name = "user_")
 public class User {
 
     @Id
@@ -23,22 +23,25 @@ public class User {
     @Column(nullable = false)
     private String nom;
 
-    @Column(nullable = false)
-    private Integer id_role;
+    @ManyToOne
+    @JoinColumn(name = "id_role", nullable = false)
+    private Role role;
 
     private String prenom;
-
     private boolean synced;
 
-    // Constructeur vide obligatoire pour JPA
+    // Ajoutez cette relation pour l'historique de blocage
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<HistoriqueBlocage> historiqueBlocages;
+
+    // Constructeurs
     public User() {}
 
-    // Constructeur pratique
-    public User(String email, String password, String nom, Integer id_role) {
+    public User(String email, String password, String nom, Role role) {
         this.email = email;
         this.password = password;
         this.nom = nom;
-        this.id_role = id_role;
+        this.role = role;
     }
 
     // Getters et setters
@@ -54,8 +57,8 @@ public class User {
     public String getNom() { return nom; }
     public void setNom(String nom) { this.nom = nom; }
 
-    public Integer getId_role() { return id_role; }
-    public void setId_role(Integer id_role) { this.id_role = id_role; }
+    public Role getRole() { return role; }
+    public void setRole(Role role) { this.role = role; }
 
     public String getPrenom() { return prenom; }
     public void setPrenom(String prenom) { this.prenom = prenom; }
@@ -65,5 +68,9 @@ public class User {
 
     public boolean isSynced() { return synced; }
     public void setSynced(boolean synced) { this.synced = synced; }
-}
 
+    public List<HistoriqueBlocage> getHistoriqueBlocages() { return historiqueBlocages; }
+    public void setHistoriqueBlocages(List<HistoriqueBlocage> historiqueBlocages) { 
+        this.historiqueBlocages = historiqueBlocages; 
+    }
+}

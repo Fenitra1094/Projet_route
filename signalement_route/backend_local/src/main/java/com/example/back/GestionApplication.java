@@ -22,7 +22,7 @@ public class GestionApplication extends SpringBootServletInitializer {
     public static void main(String[] args) {
         // 🔹 Initialisation Firebase
         try {
-            FileInputStream serviceAccount = new FileInputStream("chemin/vers/serviceAccountKey.json");
+            FileInputStream serviceAccount = new FileInputStream("E:\\HP\\Documents\\S5\\Mr Rojo\\Mobile\\Projet_route\\Projet_route\\signalement_route\\backend_local\\src\\main\\resources\\firebase-service-account.json");
 
             FirebaseOptions options = new FirebaseOptions.Builder()
                     .setCredentials(GoogleCredentials.fromStream(serviceAccount))
