@@ -1,2 +1,3 @@
 /signalement_route/backend_local/target/
 /signalement_route/backend_local/.mvn
+/signalement_route/backend_local/src/main/resources/firebase-service-account.json
