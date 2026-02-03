@@ -16,6 +16,7 @@ import {
   where,
   Timestamp,
   updateDoc,
+  setDoc,
   doc,
   onSnapshot,
   getDoc
@@ -122,12 +123,12 @@ export const incrementLoginAttempts = async (userId: string) => {
     // Bloquer après 3 tentatives
     const isBlocked = attempts >= 3;
     
-    await updateDoc(userDocRef, {
+    await setDoc(userDocRef, {
       loginAttempts: attempts,
       isBlocked: isBlocked,
       blockedUntil: isBlocked ? Timestamp.now().toDate() : null,
       lastFailedLogin: Timestamp.now()
-    });
+    }, { merge: true });
     
     return { attempts, isBlocked };
   } catch (error) {
@@ -142,12 +143,12 @@ export const incrementLoginAttempts = async (userId: string) => {
 export const resetLoginAttempts = async (userId: string) => {
   try {
     const userDocRef = doc(db, "users", userId);
-    await updateDoc(userDocRef, {
+    await setDoc(userDocRef, {
       loginAttempts: 0,
       isBlocked: false,
       blockedUntil: null,
       lastSuccessfulLogin: Timestamp.now()
-    });
+    }, { merge: true });
   } catch (error) {
     console.error("Erreur réinitialisation tentatives:", error);
     throw error;
