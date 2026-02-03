@@ -1,6 +1,4 @@
-/signalement_route/backend_local/target/
-/signalement_route/backend_local/.mvn
-/signalement_route/backend_local/src/main/resources/firebase-service-account.json
+/signalement_route/
 # Specifies intentionally untracked files to ignore when using Git
 # http://git-scm.com/docs/gitignore
 
@@ -20,16 +18,17 @@ $RECYCLE.BIN/
 log.txt
 npm-debug.log*
 
-/.idea
-/.ionic
-/.sass-cache
-/.sourcemaps
-/.versions
-/.vscode/*
-!/.vscode/extensions.json
-/coverage
-/dist
-/node_modules
-/platforms
-/plugins
-/www
+/route_app_mobile/.idea
+/route_app_mobile/.ionic
+/route_app_mobile/.sass-cache
+/route_app_mobile/.sourcemaps
+/route_app_mobile/.versions
+/route_app_mobile/.vscode/*
+!/route_app_mobile/.vscode/extensions.json
+/route_app_mobile/coverage
+/route_app_mobile/dist
+/route_app_mobile/node_modules
+/route_app_mobile/platforms
+/route_app_mobile/plugins
+/route_app_mobile/www
+/route_app_mobile/.env

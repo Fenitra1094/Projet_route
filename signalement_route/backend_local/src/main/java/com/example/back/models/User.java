@@ -1,44 +1,40 @@
 package com.example.back.models;
 
+
 import jakarta.persistence.*;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import java.util.List;
 
 @Entity
-@Table(name = "user_")
+@Table(name = "user_") // correspond à ta table PostgreSQL
 public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id_user;
 
-    @Column(name = "firebase_uid", unique = true, nullable = false)
+    @Column(name = "firebase_uid", unique = true, nullable = true)
     private String firebaseUid;
 
-    @Column(nullable = false, unique = true)
+    @Column(unique = true)
     private String email;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private String password;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private String nom;
 
-    @ManyToOne
-    @JoinColumn(name = "id_role", nullable = false)
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "id_role", nullable = true)
     private Role role;
 
     private String prenom;
+
     private boolean synced;
 
-    // Ajoutez cette relation pour l'historique de blocage
-    @JsonIgnore
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<HistoriqueBlocage> historiqueBlocages;
-
-    // Constructeurs
+    // Constructeur vide obligatoire pour JPA
     public User() {}
 
+    // Constructeur pratique
     public User(String email, String password, String nom, Role role) {
         this.email = email;
         this.password = password;
@@ -70,9 +66,5 @@ public class User {
 
     public boolean isSynced() { return synced; }
     public void setSynced(boolean synced) { this.synced = synced; }
-
-    public List<HistoriqueBlocage> getHistoriqueBlocages() { return historiqueBlocages; }
-    public void setHistoriqueBlocages(List<HistoriqueBlocage> historiqueBlocages) { 
-        this.historiqueBlocages = historiqueBlocages; 
-    }
 }
+

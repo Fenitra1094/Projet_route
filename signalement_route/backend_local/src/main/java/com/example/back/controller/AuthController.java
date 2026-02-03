@@ -1,15 +1,25 @@
 package com.example.back.controller;
 
-import com.example.back.dto.LoginRequest;
-import com.example.back.dto.LoginResponse;
-import com.example.back.models.*;
-import com.example.back.repository.*;
-import com.example.back.util.FirebaseUtils;
+import java.util.Optional;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Optional;
+import com.example.back.dto.LoginRequest;
+import com.example.back.dto.LoginResponse;
+import com.example.back.models.HistoriqueBlocage;
+import com.example.back.models.User;
+import com.example.back.repository.HistoriqueBlocageRepository;
+import com.example.back.repository.StatusBlocageRepository;
+import com.example.back.repository.UserRepository;
+import com.example.back.util.FirebaseUtils;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -31,43 +41,17 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest loginRequest) {
         try {
-            // 1. Vérifier Firebase token
+            // 1. Vérifier Firebase token uniquement
             String firebaseUid = FirebaseUtils.verifyToken(loginRequest.getPassword());
             
-            // 2. Chercher l'utilisateur dans la base PostgreSQL
-            Optional<User> userOpt = userRepository.findByFirebaseUid(firebaseUid);
-            
-            if (userOpt.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body("Utilisateur non trouvé. Veuillez vous inscrire.");
-            }
-            
-            User user = userOpt.get();
-            
-            // 3. Vérifier si l'utilisateur est bloqué
-            // Utilisez la méthode corrigée
-            Optional<HistoriqueBlocage> dernierBlocageOpt = 
-                historiqueBlocageRepository.findLatestByUserId(user.getId_user());
-            
-            if (dernierBlocageOpt.isPresent()) {
-                HistoriqueBlocage dernierBlocage = dernierBlocageOpt.get();
-                StatusBlocage status = dernierBlocage.getStatusBlocage();
-                
-                // Vérifier si le dernier statut est "Bloqué"
-                if ("Bloqué".equalsIgnoreCase(status.getStatus())) {
-                    return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                            .body("Votre compte est bloqué. Date du blocage: " + 
-                                  dernierBlocage.getDate());
-                }
-            }
-            
-            // 4. Réponse avec les données utilisateur
+            // 2. Si le token Firebase est valide, retourner une réponse de succès
+            // L'utilisateur est authentifié via Firebase
             LoginResponse response = new LoginResponse(
-                user.getId_user(),
-                user.getEmail(),
-                user.getNom(),
-                user.getPrenom(),
-                user.getRole().getLibelle(),
+                null,  // ID utilisateur non disponible sans la base de données
+                null,  // Email non disponible
+                null,  // Nom non disponible
+                null,  // Prénom non disponible
+                null,  // Rôle non disponible
                 firebaseUid
             );
             
@@ -75,7 +59,7 @@ public class AuthController {
             
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body("Échec de l'authentification: " + e.getMessage());
+                    .body("Échec de l'authentification Firebase: " + e.getMessage());
         }
     }
 
