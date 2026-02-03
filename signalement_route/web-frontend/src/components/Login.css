@@ -1,0 +1,83 @@
+/* Simple styles for Login component */
+.login-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 70vh;
+  padding: 20px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+  padding: 28px;
+  box-sizing: border-box;
+}
+
+.login-title {
+  margin: 0 0 18px 0;
+  font-size: 22px;
+  color: #222;
+  text-align: center;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.login-input,
+.login-select {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+}
+
+.login-input:focus,
+.login-select:focus {
+  border-color: #6ca0ff;
+  box-shadow: 0 0 0 4px rgba(108,160,255,0.08);
+}
+
+.login-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+
+.login-button,
+.toggle-button {
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.login-button {
+  background: #2e7dff;
+  color: #fff;
+}
+
+.toggle-button {
+  background: transparent;
+  color: #2e7dff;
+}
+
+.login-error {
+  color: #d93025;
+  margin-top: 10px;
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .login-card { padding: 18px; }
+}
