@@ -1,0 +1,5 @@
+ionic start RouteApp blank --type vue
+cd RouteApp
+
+npm install firebase axios leaflet vue-leaflet
+npm install -D @types/leaflet
