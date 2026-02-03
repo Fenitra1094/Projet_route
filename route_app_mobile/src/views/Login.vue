@@ -71,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   IonPage,
@@ -92,156 +92,102 @@ import {
   toastController
 } from '@ionic/vue';
 import { 
-  auth, 
-  signInWithEmailAndPassword 
-} from '@/config/firebase';
-import axios from 'axios';
+  loginUser, 
+  checkUserBlockStatus, 
+  resetLoginAttempts, 
+  incrementLoginAttempts 
+} from '@/services/firebaseService';
 
 const router = useRouter();
 
 // Data
-const email = ref('test@example.com'); // Pré-rempli pour test
-const password = ref('Test123!'); // Pré-rempli pour test
+const email = ref('bemaso@gmail.com'); // Pré-rempli pour test
+const password = ref('bemasooo'); // Pré-rempli pour test
 const loading = ref(false);
 const errorMessage = ref('');
 const successMessage = ref('');
 
-// API configuration
-const API_BASE_URL = 'http://localhost:8081/api';
-
-// Fonction pour vérifier la config Firebase
-const checkFirebaseConfig = () => {
-  console.log('🔧 Vérification config Firebase:');
-  console.log('API Key:', import.meta.env.VITE_FIREBASE_API_KEY?.substring(0, 10) + '...');
-  console.log('Auth Domain:', import.meta.env.VITE_FIREBASE_AUTH_DOMAIN);
-  console.log('Project ID:', import.meta.env.VITE_FIREBASE_PROJECT_ID);
-  
-  // Vérifier si la config est présente
-  const hasConfig = import.meta.env.VITE_FIREBASE_API_KEY && 
-                   import.meta.env.VITE_FIREBASE_API_KEY !== 'AIzaSyA...votre_clé';
-  
-  if (!hasConfig) {
-    errorMessage.value = 'Configuration Firebase manquante. Vérifiez le fichier .env';
-    return false;
-  }
-  
-  return true;
-};
-
-// Login function - Version corrigée
+// Login function - Firebase uniquement
 const login = async () => {
   try {
     loading.value = true;
     errorMessage.value = '';
     successMessage.value = '';
 
-    // 1. Vérifier la configuration Firebase
-    if (!checkFirebaseConfig()) {
+    console.log('🔐 Tentative de connexion avec:', email.value);
+
+    // 1. Vérifier le blocage de l'utilisateur
+    // (Nous vérifierons d'abord en essayant de se connecter)
+    
+    // 2. Appel Firebase Auth via firebaseService
+    const result = await loginUser(email.value.trim(), password.value);
+    
+    if (!result.user || !result.token) {
+      throw new Error('Authentification Firebase échouée');
+    }
+
+    console.log('✅ Firebase Auth réussie!');
+    console.log('UID:', result.user.uid);
+    console.log('Email:', result.user.email);
+    
+    // 3. Vérifier le blocage après login réussi
+    const blockStatus = await checkUserBlockStatus(result.user.uid);
+    
+    if (blockStatus.isBlocked) {
+      errorMessage.value = `Compte bloqué jusqu'à ${blockStatus.blockedUntil}. Réessayez plus tard.`;
+      await showToast(errorMessage.value, 'warning');
       loading.value = false;
       return;
     }
-
-    console.log('🔐 Tentative de connexion avec:', {
-      email: email.value,
-      passwordLength: password.value.length
-    });
-
-    // 2. Firebase Authentication
-    console.log('🔥 Tentative Firebase Auth...');
-    const firebaseUser = await signInWithEmailAndPassword(
-      auth, 
-      email.value.trim(), // Trim pour enlever les espaces
-      password.value
-    );
     
-    console.log('✅ Firebase Auth réussie!');
-    console.log('UID:', firebaseUser.user.uid);
-    console.log('Email:', firebaseUser.user.email);
+    // 4. Login réussi - réinitialiser les tentatives
+    await resetLoginAttempts(result.user.uid);
     
-    // 3. Récupérer le token
-    const firebaseToken = await firebaseUser.user.getIdToken();
-    console.log('🔑 Token obtenu (début):', firebaseToken.substring(0, 20) + '...');
+    // 5. Stocker les informations
+    localStorage.setItem('firebaseUid', result.user.uid);
+    localStorage.setItem('userEmail', result.user.email || '');
+    localStorage.setItem('token', result.token);
     
-    // 4. Vérifier l'utilisateur dans notre API
-    console.log('🌐 Appel API backend...');
-    const response = await axios.post(`${API_BASE_URL}/auth/login`, {
-      email: email.value,
-      password: firebaseToken // On envoie le token comme "password"
-    });
-
-    console.log('✅ Réponse API:', response.status, response.data);
-
-    if (response.status === 200) {
-      // 5. Stocker les informations
-      const userData = response.data;
-      
-      localStorage.setItem('user', JSON.stringify(userData));
-      localStorage.setItem('token', firebaseToken);
-      localStorage.setItem('firebaseUid', firebaseUser.user.uid);
-      
-      // 6. Afficher message de succès
-      await showToast('Connexion réussie ! Redirection...', 'success');
-      
-      // 7. Rediriger vers la carte
-      setTimeout(() => {
-        router.push('/map');
-      }, 1000);
-      
-    } else {
-      errorMessage.value = 'Échec de la connexion avec le backend';
-    }
+    // 6. Afficher message de succès
+    successMessage.value = 'Connexion réussie !';
+    await showToast('Connexion réussie ! Redirection...', 'success');
+    
+    // 7. Rediriger vers la carte
+    setTimeout(() => {
+      router.push('/map');
+    }, 500);
     
   } catch (error: any) {
-    console.error('❌ ERREUR DÉTAILLÉE:', error);
+    console.error('❌ Erreur de connexion:', error);
+    loading.value = false;
     
-    // Log supplémentaire pour Firebase
-    if (error.code) {
-      console.error('Code erreur Firebase:', error.code);
-      console.error('Message Firebase:', error.message);
-    }
-    
-    // Gestion des erreurs spécifiques
+    // Gestion des erreurs spécifiques Firebase
     if (error.code === 'auth/invalid-credential') {
-      errorMessage.value = 'Email ou mot de passe incorrect. ';
-      errorMessage.value += 'Vérifiez que l\'utilisateur existe dans Firebase Console.';
-      
-      // Aide supplémentaire
-      console.warn('💡 ASTUCE: Vérifiez dans Firebase Console:');
-      console.warn('1. Allez dans Authentication → Users');
-      console.warn('2. Vérifiez si ' + email.value + ' existe');
-      console.warn('3. Si non, créez-le manuellement');
+      errorMessage.value = 'Email ou mot de passe incorrect.';
+      await incrementLoginAttempts(email.value);
       
     } else if (error.code === 'auth/user-not-found') {
-      errorMessage.value = 'Aucun utilisateur trouvé avec cet email. ';
-      errorMessage.value += 'Créez d\'abord l\'utilisateur dans Firebase Console.';
+      errorMessage.value = 'Utilisateur non trouvé. Créez un compte d\'abord.';
       
     } else if (error.code === 'auth/wrong-password') {
-      errorMessage.value = 'Mot de passe incorrect. ';
-      errorMessage.value += 'Réinitialisez-le dans Firebase Console si nécessaire.';
+      errorMessage.value = 'Mot de passe incorrect.';
+      await incrementLoginAttempts(email.value);
       
     } else if (error.code === 'auth/too-many-requests') {
       errorMessage.value = 'Trop de tentatives. Réessayez dans quelques minutes.';
       
     } else if (error.code === 'auth/network-request-failed') {
-      errorMessage.value = 'Erreur réseau. Vérifiez votre connexion internet.';
+      errorMessage.value = 'Erreur réseau. Vérifiez votre connexion.';
       
-    } else if (error.response) {
-      // Erreur backend
-      const status = error.response.status;
-      const data = error.response.data;
-      
-      if (status === 404) {
-        errorMessage.value = 'Utilisateur non trouvé dans notre base de données. ';
-        errorMessage.value += 'Assurez-vous qu\'il est aussi dans PostgreSQL.';
-      } else if (status === 403) {
-        errorMessage.value = 'Compte bloqué: ' + data;
-      } else {
-        errorMessage.value = 'Erreur serveur: ' + (data || 'Veuillez réessayer');
-      }
+    } else if (error.message?.includes('bloqué')) {
+      errorMessage.value = error.message;
       
     } else {
-      errorMessage.value = 'Erreur inattendue: ' + (error.message || 'Veuillez réessayer');
+      errorMessage.value = 'Erreur de connexion: ' + (error.message || error);
     }
+    
+    await showToast(errorMessage.value, 'danger');
+    
   } finally {
     loading.value = false;
   }
@@ -258,40 +204,9 @@ const showToast = async (message: string, color: string = 'success') => {
   await toast.present();
 };
 
-// Test simple pour vérifier Firebase
-const testFirebaseConnection = async () => {
-  console.log('🧪 Test Firebase...');
-  
-  try {
-    // Tentative avec des identifiants connus
-    const testEmail = 'test@example.com';
-    const testPassword = 'Test123!';
-    
-    console.log('Test avec:', testEmail);
-    
-    const result = await signInWithEmailAndPassword(auth, testEmail, testPassword);
-    console.log('✅ Test Firebase réussi!');
-    console.log('UID:', result.user.uid);
-    
-    return true;
-  } catch (error: any) {
-    console.error('❌ Test Firebase échoué:', error.code, error.message);
-    return false;
-  }
-};
-
-
-
-// Au chargement de la page
-import { onMounted } from 'vue';
 onMounted(() => {
   console.log('🚀 Page Login montée');
-  
-  // Vérifier la config Firebase
-  checkFirebaseConfig();
-  
-  // Optionnel: Tester la connexion Firebase
-  // testFirebaseConnection();
+  console.log('Firebase prêt à l\'emploi');
 });
 </script>
 
