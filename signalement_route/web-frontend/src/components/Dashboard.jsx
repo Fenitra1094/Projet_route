@@ -191,6 +191,7 @@ function Dashboard() {
           {syncLoading ? 'Sync complète...' : 'Sync complète'}
         </button>
         {syncMessage && <p className="sync-message">{syncMessage}</p>}
+        <a href="/users" className="back-link">👥 Voir les Utilisateurs</a>
         <a href="/" className="back-link">Retour à l'accueil</a>
       </div>
     </div>
