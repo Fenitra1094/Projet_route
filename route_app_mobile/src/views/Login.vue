@@ -67,8 +67,10 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   checkUserBlockStatus,
+  getSecurityConfig,
   logoutUser,
   loginUser,
+  setSession,
   syncUserProfile
 } from '@/services/firebaseService';
 
@@ -104,6 +106,9 @@ const handleLogin = async () => {
       showToast('Compte bloque. Contactez un administrateur.');
       return;
     }
+
+    const securityConfig = await getSecurityConfig();
+    setSession(user.uid, securityConfig.sessionDurationSec);
 
     localStorage.setItem('user', JSON.stringify({
       uid: user.uid,

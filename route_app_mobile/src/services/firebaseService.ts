@@ -46,6 +46,14 @@ export const storage = getStorage(app);
 
 // ==================== AUTHENTIFICATION ====================
 
+const SESSION_KEY = "session";
+
+type SessionInfo = {
+  userId: string;
+  createdAt: number;
+  expiresAt: number;
+};
+
 type SecurityConfig = {
   maxAttempts: number;
   sessionDurationSec: number;
@@ -110,6 +118,35 @@ export const logoutUser = async () => {
  */
 export const onAuthChange = (callback: (user: User | null) => void) => {
   return onAuthStateChanged(auth, callback);
+};
+
+export const setSession = (userId: string, durationSec: number) => {
+  const createdAt = Date.now();
+  const expiresAt = createdAt + durationSec * 1000;
+  const payload: SessionInfo = { userId, createdAt, expiresAt };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
+};
+
+export const getSession = (): SessionInfo | null => {
+  const raw = localStorage.getItem(SESSION_KEY);
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as SessionInfo;
+  } catch {
+    return null;
+  }
+};
+
+export const isSessionValid = () => {
+  const session = getSession();
+  if (!session) return false;
+  return Date.now() < session.expiresAt;
+};
+
+export const clearSession = () => {
+  localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem("user");
 };
 
 export const syncUserProfile = async (user: User) => {

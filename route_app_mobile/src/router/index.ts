@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from '@ionic/vue-router';
 import Login from '@/views/Login.vue';
 import Carte from '@/views/Carte.vue';
 import Map from '@/views/Map.vue';
+import { clearSession, isSessionValid, logoutUser } from '@/services/firebaseService';
 
 const routes = [
   {
@@ -35,15 +36,27 @@ const router = createRouter({
 });
 
 // Garde de navigation
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
   const user = localStorage.getItem('user');
   
   if (requiresAuth && !user) {
     next('/login');
-  } else {
-    next();
+    return;
   }
+
+  if (requiresAuth && !isSessionValid()) {
+    try {
+      await logoutUser();
+    } catch (error) {
+      console.error('Erreur deconnexion:', error);
+    }
+    clearSession();
+    next('/login');
+    return;
+  }
+
+  next();
 });
 
 export default router;
