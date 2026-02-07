@@ -46,6 +46,39 @@ export const storage = getStorage(app);
 
 // ==================== AUTHENTIFICATION ====================
 
+type SecurityConfig = {
+  maxAttempts: number;
+  sessionDurationSec: number;
+};
+
+const normalizeTimestamp = (value: any): Date | null => {
+  if (!value) return null;
+  if (value instanceof Timestamp) return value.toDate();
+  if (value instanceof Date) return value;
+  return null;
+};
+
+export const getSecurityConfig = async (): Promise<SecurityConfig> => {
+  const configRef = doc(db, "config", "securite");
+  const snapshot = await getDoc(configRef);
+  const data = snapshot.exists() ? snapshot.data() : {};
+
+  return {
+    maxAttempts: Number(data?.nombre_tentative ?? 3),
+    sessionDurationSec: Number(data?.duree_session ?? 3600)
+  };
+};
+
+export const findUserByEmail = async (email: string) => {
+  const q = query(collection(db, "users"), where("email", "==", email));
+  const snapshot = await getDocs(q);
+
+  if (snapshot.empty) return null;
+
+  const first = snapshot.docs[0];
+  return { id: first.id, ...first.data() } as any;
+};
+
 /**
  * Connexion avec email et mot de passe
  */
@@ -79,6 +112,39 @@ export const onAuthChange = (callback: (user: User | null) => void) => {
   return onAuthStateChanged(auth, callback);
 };
 
+export const syncUserProfile = async (user: User) => {
+  const userDocRef = doc(db, "users", user.uid);
+  const snapshot = await getDoc(userDocRef);
+  const now = Timestamp.now();
+  const email = user.email || "";
+  const nom = user.displayName || (email ? email.split("@")[0] : "utilisateur");
+
+  if (!snapshot.exists()) {
+    await setDoc(userDocRef, {
+      uid: user.uid,
+      email,
+      nom,
+      Id_role: "manager",
+      Id_status_blocage: "debloque",
+      loginAttempts: 0,
+      isBlocked: false,
+      blockedUntil: null,
+      createdAt: now,
+      updatedAt: now
+    });
+    return;
+  }
+
+  await updateDoc(userDocRef, {
+    email,
+    nom,
+    loginAttempts: 0,
+    isBlocked: false,
+    blockedUntil: null,
+    updatedAt: now
+  });
+};
+
 /**
  * Vérifier et gérer le blocage de l'utilisateur
  */
@@ -89,8 +155,10 @@ export const checkUserBlockStatus = async (userId: string) => {
     
     if (userDoc.exists()) {
       const userData = userDoc.data();
+      const statusBlocageId = userData.Id_status_blocage || userData.statusBlocageId || userData.status_blocage;
+      const isBlocked = Boolean(userData.isBlocked) || statusBlocageId === "bloque";
       return {
-        isBlocked: userData.isBlocked || false,
+        isBlocked,
         blockedUntil: userData.blockedUntil || null,
         loginAttempts: userData.loginAttempts || 0
       };
@@ -107,11 +175,37 @@ export const checkUserBlockStatus = async (userId: string) => {
   }
 };
 
+export const checkUserBlockStatusByEmail = async (email: string) => {
+  const userData = await findUserByEmail(email);
+
+  if (!userData) {
+    return {
+      exists: false,
+      userId: null,
+      isBlocked: false,
+      blockedUntil: null,
+      loginAttempts: 0
+    };
+  }
+
+  const statusBlocageId = userData.statusBlocageId || userData.status_blocage;
+  const isBlocked = Boolean(userData.isBlocked) || statusBlocageId === "bloque";
+
+  return {
+    exists: true,
+    userId: userData.id,
+    isBlocked,
+    blockedUntil: normalizeTimestamp(userData.blockedUntil),
+    loginAttempts: userData.loginAttempts || 0
+  };
+};
+
 /**
  * Incrémenter le compteur de tentatives échouées
  */
 export const incrementLoginAttempts = async (userId: string) => {
   try {
+    const { maxAttempts } = await getSecurityConfig();
     const userDocRef = doc(db, "users", userId);
     const userDoc = await getDoc(userDocRef);
     
@@ -120,8 +214,7 @@ export const incrementLoginAttempts = async (userId: string) => {
       attempts = (userDoc.data().loginAttempts || 0) + 1;
     }
     
-    // Bloquer après 3 tentatives
-    const isBlocked = attempts >= 3;
+    const isBlocked = attempts >= maxAttempts;
     
     await setDoc(userDocRef, {
       loginAttempts: attempts,
@@ -135,6 +228,28 @@ export const incrementLoginAttempts = async (userId: string) => {
     console.error("Erreur incrémentation tentatives:", error);
     throw error;
   }
+};
+
+export const incrementLoginAttemptsByEmail = async (email: string) => {
+  const { maxAttempts } = await getSecurityConfig();
+  const userData = await findUserByEmail(email);
+
+  if (!userData) {
+    return { attempts: 0, isBlocked: false, maxAttempts };
+  }
+
+  const attempts = (userData.loginAttempts || 0) + 1;
+  const isBlocked = attempts >= maxAttempts;
+  const userDocRef = doc(db, "users", userData.id);
+
+  await updateDoc(userDocRef, {
+    loginAttempts: attempts,
+    isBlocked: isBlocked,
+    blockedUntil: isBlocked ? Timestamp.now().toDate() : null,
+    lastFailedLogin: Timestamp.now()
+  });
+
+  return { attempts, isBlocked, maxAttempts };
 };
 
 /**
