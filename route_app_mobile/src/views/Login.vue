@@ -16,10 +16,19 @@
         <ion-label position="stacked">Mot de passe</ion-label>
         <ion-input
           v-model="password"
-          type="password"
+          :type="passwordType"
           placeholder="Votre mot de passe"
           @keyup.enter="handleLogin"
         />
+        <ion-button
+          fill="clear"
+          slot="end"
+          type="button"
+          aria-label="Afficher ou masquer le mot de passe"
+          @click="showPassword = !showPassword"
+        >
+          <ion-icon :icon="showPassword ? eyeOffOutline : eyeOutline" />
+        </ion-button>
       </ion-item>
 
       <ion-button
@@ -53,6 +62,7 @@ import {
   IonButton,
   IonContent,
   IonHeader,
+  IonIcon,
   IonInput,
   IonItem,
   IonLabel,
@@ -63,18 +73,16 @@ import {
   IonToast,
   IonToolbar
 } from '@ionic/vue';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+import { eyeOffOutline, eyeOutline } from 'ionicons/icons';
 import { useRouter } from 'vue-router';
-import {
-  checkUserBlockStatus,
-  logoutUser,
-  loginUser,
-  syncUserProfile
-} from '@/services/firebaseService';
+import { loginWithEmail } from '@/services/LoginService';
 
 const router = useRouter();
 const email = ref('bemaso@gmail.com');
 const password = ref('bemasooo');
+const showPassword = ref(false);
+const passwordType = computed(() => (showPassword.value ? 'text' : 'password'));
 const loading = ref(false);
 const toastOpen = ref(false);
 const toastMessage = ref('');
@@ -95,25 +103,12 @@ const handleLogin = async () => {
   loading.value = true;
 
   try {
-    const { user } = await loginUser(email.value, password.value);
-    await syncUserProfile(user);
-    const status = await checkUserBlockStatus(user.uid);
+    const result = await loginWithEmail(email.value, password.value);
+    showToast(result.message, result.status === 'success' ? 'success' : 'danger');
 
-    if (status.isBlocked) {
-      await logoutUser();
-      showToast('Compte bloque. Contactez un administrateur.');
-      return;
+    if (result.status === 'success') {
+      await router.replace('/map');
     }
-
-    localStorage.setItem('user', JSON.stringify({
-      uid: user.uid,
-      email: user.email
-    }));
-
-    showToast('Connexion reussie.', 'success');
-    await router.replace('/map');
-  } catch (error) {
-    showToast('Connexion echouee. Verifiez vos identifiants.');
   } finally {
     loading.value = false;
   }

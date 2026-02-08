@@ -29,13 +29,13 @@ import {
   IonToolbar
 } from '@ionic/vue';
 import { useRouter } from 'vue-router';
-import { logoutUser } from '@/services/firebaseService';
+import { clearSession, logoutUser } from '@/services/LoginService';
 
 const router = useRouter();
 
 const handleLogout = async () => {
   await logoutUser();
-  localStorage.removeItem('user');
+  clearSession();
   await router.replace('/login');
 };
 </script>
