@@ -74,13 +74,13 @@ const computeBlockedState = (data: Record<string, any>) => {
 };
 
 export const getSecurityConfig = async (): Promise<SecurityConfig> => {
-  const configRef = doc(db, 'config', 'securite');
+  const configRef = doc(db, 'parametre', 'parametre');
   const snapshot = await getDoc(configRef);
   const data = snapshot.exists() ? snapshot.data() : {};
 
   return {
     maxAttempts: Number(data?.nombre_tentative ?? 3),
-    sessionDurationSec: Number(data?.duree_session ?? 3600)
+    sessionDurationSec: Number(data?.session_vie ?? 3600)
   };
 };
 
@@ -186,7 +186,7 @@ export const syncUserProfile = async (user: User) => {
       uid: user.uid,
       email,
       nom,
-      Id_role: 'manager',
+      Id_role: 'user',
       Id_status_blocage: 'debloque',
       loginAttempts: 0,
       isBlocked: false,
@@ -334,12 +334,23 @@ export const loginWithEmail = async (
   email: string,
   password: string
 ): Promise<LoginResult> => {
-  const preStatus = await checkUserBlockStatusByEmail(email);
-  if (preStatus.isBlocked) {
-    return {
-      status: 'blocked',
-      message: 'Compte bloque. Contactez un administrateur.'
-    };
+  try {
+    const preStatus = await checkUserBlockStatusByEmail(email);
+    if (preStatus.isBlocked) {
+      return {
+        status: 'blocked',
+        message: 'Compte bloque. Contactez un administrateur.'
+      };
+    }
+  } catch (error) {
+    const errorCode = (error as any)?.code || '';
+    if (errorCode === 'permission-denied') {
+      return {
+        status: 'failed',
+        message: 'Acces Firestore refuse. Verifiez les rules.'
+      };
+    }
+    throw error;
   }
 
   try {
@@ -366,6 +377,7 @@ export const loginWithEmail = async (
 
     return { status: 'success', message: 'Connexion reussie.' };
   } catch (error) {
+    console.error('Erreur Firebase Auth:', error);
     try {
       const result = await incrementLoginAttemptsByEmail(email);
       const remaining = result.maxAttempts - result.attempts;
@@ -387,9 +399,18 @@ export const loginWithEmail = async (
       // Ignore attempt tracking errors and show generic message.
     }
 
+    const errorCode = (error as any)?.code || '';
+    if (errorCode === 'permission-denied') {
+      return {
+        status: 'failed',
+        message: 'Acces Firestore refuse. Verifiez les rules.'
+      };
+    }
+
+    const suffix = errorCode ? ` (${errorCode})` : '';
     return {
       status: 'failed',
-      message: 'Connexion echouee. Verifiez vos identifiants.'
+      message: `Connexion echouee. Verifiez vos identifiants.${suffix}`
     };
   }
 };
