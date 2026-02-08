@@ -29,7 +29,7 @@ import {
   IonToolbar
 } from '@ionic/vue';
 import { useRouter } from 'vue-router';
-import { clearSession, logoutUser } from '@/services/firebaseService';
+import { clearSession, logoutUser } from '@/services/LoginService';
 
 const router = useRouter();
 

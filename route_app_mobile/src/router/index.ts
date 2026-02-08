@@ -3,7 +3,7 @@ import { createRouter, createWebHistory } from '@ionic/vue-router';
 import Login from '@/views/Login.vue';
 import Carte from '@/views/Carte.vue';
 import Map from '@/views/Map.vue';
-import { clearSession, isSessionValid, logoutUser, startUserStatusListener } from '@/services/firebaseService';
+import { clearSession, isSessionValid, logoutUser, startUserStatusListener } from '@/services/LoginService';
 
 const routes = [
   {
