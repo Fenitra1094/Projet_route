@@ -76,9 +76,34 @@
                 </ion-select-option>
               </ion-select>
             </ion-item>
+            <ion-item>
+              <ion-label position="stacked">Description</ion-label>
+              <ion-textarea v-model="draft.description" auto-grow />
+            </ion-item>
+            <ion-item>
+              <ion-label position="stacked">Photos</ion-label>
+              <input
+                class="photo-input"
+                type="file"
+                accept="image/*"
+                multiple
+                @change="handlePhotoChange"
+              />
+            </ion-item>
           </ion-list>
+          <ion-button expand="block" class="ion-margin-top" @click="handleSave">
+            Enregistrer
+          </ion-button>
         </ion-content>
       </ion-modal>
+      <ion-loading :is-open="saving" message="Enregistrement..." />
+      <ion-toast
+        :is-open="toastOpen"
+        :message="toastMessage"
+        :color="toastColor"
+        duration="2500"
+        @didDismiss="toastOpen = false"
+      />
     </ion-content>
   </ion-page>
 </template>
@@ -92,15 +117,18 @@ import {
   IonInput,
   IonItem,
   IonLabel,
+  IonLoading,
   IonList,
   IonModal,
   IonPage,
   IonSelect,
   IonSelectOption,
+  IonTextarea,
+  IonToast,
   IonTitle,
   IonToolbar
 } from '@ionic/vue';
-import type { LeafletMouseEvent } from 'leaflet';
+import L, { type LeafletMouseEvent } from 'leaflet';
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { clearSession, logoutUser } from '@/services/LoginService';
@@ -108,31 +136,68 @@ import { initCarte, type CarteInstance } from '@/services/CarteService';
 import {
   applyMapSelection,
   createSignalementDraft,
-  getEntreprises,
-  getStatuses,
-  type SignalementDraft
+  fetchEntreprises,
+  fetchQuartiers,
+  fetchStatuses,
+  listenSignalements,
+  saveSignalement,
+  updateDraftPhotos,
+  type QuartierRef,
+  type SignalementDraft,
+  type SelectOption
 } from '@/services/SignalementService';
 import 'leaflet/dist/leaflet.css';
 
 const router = useRouter();
 let carteInstance: CarteInstance | null = null;
 const showSignalModal = ref(false);
-const entreprises = getEntreprises();
-const statuses = getStatuses();
-const draft = ref<SignalementDraft>(createSignalementDraft(getUserId()));
+const entreprises = ref<SelectOption[]>([]);
+const statuses = ref<SelectOption[]>([]);
+const quartiers = ref<QuartierRef[]>([]);
+const draft = ref<SignalementDraft>(createSignalementDraft(getUserId(), getUserEmail()));
+const saving = ref(false);
+const toastOpen = ref(false);
+const toastMessage = ref('');
+const toastColor = ref<'success' | 'danger'>('success');
+let signalementLayer: L.LayerGroup | null = null;
+let signalementUnsub: (() => void) | null = null;
 
 const openSignalementForm = () => {
   showSignalModal.value = true;
 };
 
-const handleMapClick = (event: LeafletMouseEvent) => {
-  draft.value = applyMapSelection(
+const handleMapClick = async (event: LeafletMouseEvent) => {
+  draft.value = await applyMapSelection(
     draft.value,
     event.latlng.lat,
-    event.latlng.lng
+    event.latlng.lng,
+    quartiers.value
   );
   showSignalModal.value = true;
   carteInstance?.map.openPopup('Signaler', event.latlng);
+};
+
+const handlePhotoChange = (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  draft.value = updateDraftPhotos(draft.value, input.files);
+};
+
+const handleSave = async () => {
+  try {
+    saving.value = true;
+    await saveSignalement(draft.value);
+    toastMessage.value = 'Signalement enregistre.';
+    toastColor.value = 'success';
+    toastOpen.value = true;
+    showSignalModal.value = false;
+    draft.value = createSignalementDraft(getUserId(), getUserEmail());
+  } catch (error) {
+    toastMessage.value = 'Erreur lors de l\'enregistrement.';
+    toastColor.value = 'danger';
+    toastOpen.value = true;
+  } finally {
+    saving.value = false;
+  }
 };
 
 function getUserId(): string {
@@ -147,9 +212,60 @@ function getUserId(): string {
   }
 }
 
+function getUserEmail(): string {
+  const raw = localStorage.getItem('user');
+  if (!raw) return '';
+
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed?.email || '';
+  } catch {
+    return '';
+  }
+}
+
+const renderSignalements = (items: any[]) => {
+  if (!carteInstance) return;
+
+  if (!signalementLayer) {
+    signalementLayer = L.layerGroup().addTo(carteInstance.map);
+  }
+
+  signalementLayer.clearLayers();
+
+  for (const item of items) {
+    if (item.latitude == null || item.longitude == null) continue;
+    const marker = L.marker([item.latitude, item.longitude]);
+    const status = item.status || item.statusId || 'nouveau';
+    const content = `
+      <strong>${item.quartierLabel || item.quartierId || 'Quartier'}</strong><br />
+      Date: ${item.date_ || ''}<br />
+      Statut: ${status}<br />
+      Surface: ${item.surface || ''} m2<br />
+      Budget: ${item.budget || ''}<br />
+      Entreprise: ${item.entrepriseId || ''}
+    `;
+    marker.bindPopup(content);
+    marker.addTo(signalementLayer);
+  }
+};
+
 onMounted(() => {
   carteInstance = initCarte('map');
   carteInstance.map.on('click', handleMapClick);
+  signalementLayer = L.layerGroup().addTo(carteInstance.map);
+
+  Promise.all([fetchEntreprises(), fetchStatuses(), fetchQuartiers()])
+    .then(([entreprisesData, statusesData, quartiersData]) => {
+      entreprises.value = entreprisesData;
+      statuses.value = statusesData;
+      quartiers.value = quartiersData;
+    })
+    .catch(() => {
+      // Ignore load errors for now.
+    });
+
+  signalementUnsub = listenSignalements(renderSignalements);
 });
 
 onBeforeUnmount(() => {
@@ -157,6 +273,16 @@ onBeforeUnmount(() => {
     carteInstance.map.off('click', handleMapClick);
     carteInstance.destroy();
     carteInstance = null;
+  }
+
+  if (signalementLayer) {
+    signalementLayer.clearLayers();
+    signalementLayer = null;
+  }
+
+  if (signalementUnsub) {
+    signalementUnsub();
+    signalementUnsub = null;
   }
 });
 

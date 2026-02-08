@@ -16,6 +16,7 @@ import {
 } from "firebase/firestore";
 import {
   getStorage,
+  connectStorageEmulator,
   ref as storageRef,
   uploadBytes,
   getDownloadURL
@@ -37,6 +38,11 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
+if (import.meta.env.DEV) {
+  connectStorageEmulator(storage, 'localhost', 9199);
+}
+
+
 // ==================== AUTHENTIFICATION ====================
 // Login logic moved to LoginService.ts.
 
@@ -45,21 +51,27 @@ export const storage = getStorage(app);
 /**
  * Ajouter un nouveau signalement
  */
-export const addSignalement = async (signalementData: {
+export type SignalementPayload = {
   latitude: number;
   longitude: number;
-  quartier: string;
-  entreprise: string;
+  quartierId?: string;
+  quartierLabel?: string;
+  provinceId?: string;
+  entrepriseId?: string;
+  statusId?: string;
   surface: string;
   budget: string;
-  description: string;
+  description?: string;
+  date_?: string;
   userId: string;
-  userEmail: string;
-}) => {
+  userEmail?: string;
+};
+
+export const addSignalement = async (signalementData: SignalementPayload) => {
   try {
     const docRef = await addDoc(collection(db, "signalements"), {
       ...signalementData,
-      status: "nouveau",
+      status: signalementData.statusId || "nouveau",
       photos: [],
       dateCreation: Timestamp.now(),
       dateModification: Timestamp.now()
