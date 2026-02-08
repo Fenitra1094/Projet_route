@@ -6,10 +6,8 @@
       </ion-toolbar>
     </ion-header>
 
-    <ion-content class="ion-padding">
-      <ion-text>
-        <p>Carte en construction. Connexion reussie.</p>
-      </ion-text>
+    <ion-content>
+      <div id="map" class="map-container"></div>
 
       <ion-button class="ion-margin-top" expand="block" @click="handleLogout">
         Deconnexion
@@ -24,14 +22,28 @@ import {
   IonContent,
   IonHeader,
   IonPage,
-  IonText,
   IonTitle,
   IonToolbar
 } from '@ionic/vue';
+import { onBeforeUnmount, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { clearSession, logoutUser } from '@/services/LoginService';
+import { initCarte, type CarteInstance } from '@/services/CarteService';
+import 'leaflet/dist/leaflet.css';
 
 const router = useRouter();
+let carteInstance: CarteInstance | null = null;
+
+onMounted(() => {
+  carteInstance = initCarte('map');
+});
+
+onBeforeUnmount(() => {
+  if (carteInstance) {
+    carteInstance.destroy();
+    carteInstance = null;
+  }
+});
 
 const handleLogout = async () => {
   await logoutUser();
@@ -39,3 +51,10 @@ const handleLogout = async () => {
   await router.replace('/login');
 };
 </script>
+
+<style scoped>
+.map-container {
+  height: 100%;
+  width: 100%;
+}
+</style>
