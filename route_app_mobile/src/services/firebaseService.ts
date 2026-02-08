@@ -47,6 +47,8 @@ export const storage = getStorage(app);
 // ==================== AUTHENTIFICATION ====================
 
 const SESSION_KEY = "session";
+let userStatusUnsub: (() => void) | null = null;
+let userStatusUserId: string | null = null;
 
 type SessionInfo = {
   userId: string;
@@ -64,6 +66,39 @@ const normalizeTimestamp = (value: any): Date | null => {
   if (value instanceof Timestamp) return value.toDate();
   if (value instanceof Date) return value;
   return null;
+};
+
+const normalizeStatus = (value: any): string => {
+  if (!value) return "";
+  return String(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+};
+
+const getStatusInfo = (data: Record<string, any>) => {
+  const statusBlocageId =
+    data.Id_status_blocage || data.statusBlocageId || data.status_blocage;
+  const normalized = normalizeStatus(statusBlocageId);
+  const isDebloque = normalized === "debloque";
+  const isBlockedByStatus = normalized === "bloque";
+  const rawIsBlocked = Boolean(data.isBlocked);
+
+  return {
+    statusBlocageId: normalized || statusBlocageId,
+    isDebloque,
+    isBlockedByStatus,
+    rawIsBlocked
+  };
+};
+
+const computeBlockedState = (data: Record<string, any>) => {
+  const statusInfo = getStatusInfo(data);
+  const isBlocked = statusInfo.isDebloque
+    ? false
+    : statusInfo.rawIsBlocked || statusInfo.isBlockedByStatus;
+
+  return { ...statusInfo, isBlocked };
 };
 
 export const getSecurityConfig = async (): Promise<SecurityConfig> => {
@@ -145,8 +180,43 @@ export const isSessionValid = () => {
 };
 
 export const clearSession = () => {
+  stopUserStatusListener();
   localStorage.removeItem(SESSION_KEY);
   localStorage.removeItem("user");
+};
+
+export const startUserStatusListener = (userId: string) => {
+  if (userStatusUnsub && userStatusUserId === userId) return;
+
+  stopUserStatusListener();
+  userStatusUserId = userId;
+
+  const userDocRef = doc(db, "users", userId);
+  userStatusUnsub = onSnapshot(userDocRef, async (snapshot) => {
+    if (!snapshot.exists()) return;
+
+    const data = snapshot.data();
+    const { isBlocked, isDebloque, rawIsBlocked } = computeBlockedState(data);
+    const loginAttempts = data.loginAttempts || 0;
+
+    if (isDebloque && (rawIsBlocked || loginAttempts > 0)) {
+      await updateDoc(userDocRef, {
+        isBlocked: false,
+        loginAttempts: 0,
+        blockedUntil: null,
+        updatedAt: Timestamp.now()
+      });
+      window.dispatchEvent(new CustomEvent("user-unblocked"));
+    }
+  });
+};
+
+export const stopUserStatusListener = () => {
+  if (userStatusUnsub) {
+    userStatusUnsub();
+    userStatusUnsub = null;
+    userStatusUserId = null;
+  }
 };
 
 export const syncUserProfile = async (user: User) => {
@@ -192,8 +262,7 @@ export const checkUserBlockStatus = async (userId: string) => {
     
     if (userDoc.exists()) {
       const userData = userDoc.data();
-      const statusBlocageId = userData.Id_status_blocage || userData.statusBlocageId || userData.status_blocage;
-      const isBlocked = Boolean(userData.isBlocked) || statusBlocageId === "bloque";
+      const { isBlocked } = computeBlockedState(userData);
       return {
         isBlocked,
         blockedUntil: userData.blockedUntil || null,
@@ -225,15 +294,15 @@ export const checkUserBlockStatusByEmail = async (email: string) => {
     };
   }
 
-  const statusBlocageId = userData.statusBlocageId || userData.status_blocage;
-  const isBlocked = Boolean(userData.isBlocked) || statusBlocageId === "bloque";
+  const { isBlocked } = computeBlockedState(userData);
+  const loginAttempts = userData.loginAttempts || 0;
 
   return {
     exists: true,
     userId: userData.id,
     isBlocked,
     blockedUntil: normalizeTimestamp(userData.blockedUntil),
-    loginAttempts: userData.loginAttempts || 0
+    loginAttempts: loginAttempts
   };
 };
 
@@ -282,6 +351,7 @@ export const incrementLoginAttemptsByEmail = async (email: string) => {
   await updateDoc(userDocRef, {
     loginAttempts: attempts,
     isBlocked: isBlocked,
+    Id_status_blocage: isBlocked ? "bloque" : userData.Id_status_blocage || "debloque",
     blockedUntil: isBlocked ? Timestamp.now().toDate() : null,
     lastFailedLogin: Timestamp.now()
   });

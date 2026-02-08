@@ -3,7 +3,7 @@ import { createRouter, createWebHistory } from '@ionic/vue-router';
 import Login from '@/views/Login.vue';
 import Carte from '@/views/Carte.vue';
 import Map from '@/views/Map.vue';
-import { clearSession, isSessionValid, logoutUser } from '@/services/firebaseService';
+import { clearSession, isSessionValid, logoutUser, startUserStatusListener } from '@/services/firebaseService';
 
 const routes = [
   {
@@ -43,6 +43,7 @@ router.beforeEach(async (to, from, next) => {
   if (requiresAuth && !user) {
     next('/login');
     return;
+    
   }
 
   if (requiresAuth && !isSessionValid()) {
@@ -54,6 +55,17 @@ router.beforeEach(async (to, from, next) => {
     clearSession();
     next('/login');
     return;
+  }
+
+  if (requiresAuth && user) {
+    try {
+      const parsed = JSON.parse(user);
+      if (parsed?.uid) startUserStatusListener(parsed.uid);
+    } catch {
+      clearSession();
+      next('/login');
+      return;
+    }
   }
 
   next();
