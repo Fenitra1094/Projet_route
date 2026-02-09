@@ -1,5 +1,5 @@
 import { collection, getDocs } from 'firebase/firestore';
-import { addPhotoToSignalement, addSignalement, onAllSignalementsChange, uploadPhoto } from './firebaseService';
+import { addPhotoToSignalement, addSignalement, onAllSignalementsChange } from './firebaseService';
 import { db } from './firebaseService';
 
 export type SignalementDraft = {
@@ -231,6 +231,32 @@ const compressImage = async (file: File, maxWidth = 1280, quality = 0.7): Promis
   return new File([blob], `${baseName}_compressed.jpg`, { type: 'image/jpeg' });
 };
 
+const uploadToCloudinary = async (file: File): Promise<string> => {
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as string | undefined;
+  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET as string | undefined;
+
+  if (!cloudName || !uploadPreset) {
+    throw new Error('Cloudinary non configure');
+  }
+
+  const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', uploadPreset);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    body: formData
+  });
+
+  if (!response.ok) {
+    throw new Error('Echec upload Cloudinary');
+  }
+
+  const data = await response.json();
+  return data.secure_url as string;
+};
+
 export const saveSignalement = async (draft: SignalementDraft) => {
   if (!draft.latitude || !draft.longitude) {
     throw new Error('Coordonnees manquantes');
@@ -256,7 +282,7 @@ export const saveSignalement = async (draft: SignalementDraft) => {
     const compressed = await Promise.all(
       draft.photos.map((file) => compressImage(file))
     );
-    const uploads = compressed.map((file) => uploadPhoto(signalementId, file, draft.userId));
+    const uploads = compressed.map((file) => uploadToCloudinary(file));
     const urls = await Promise.all(uploads);
     for (const url of urls) {
       await addPhotoToSignalement(signalementId, url);

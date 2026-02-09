@@ -4,7 +4,6 @@
       <ion-toolbar>
         <ion-title>Carte</ion-title>
         <ion-buttons slot="end">
-          <ion-button @click="openSignalementForm">Signaler</ion-button>
           <ion-button @click="handleLogout">Deconnexion</ion-button>
         </ion-buttons>
       </ion-toolbar>
@@ -43,42 +42,6 @@
             <ion-item>
               <ion-label position="stacked">Longitude</ion-label>
               <ion-input :value="draft.longitude" readonly />
-            </ion-item>
-            <ion-item>
-              <ion-label position="stacked">Surface (m2)</ion-label>
-              <ion-input v-model="draft.surface" type="number" />
-            </ion-item>
-            <ion-item>
-              <ion-label position="stacked">Budget</ion-label>
-              <ion-input v-model="draft.budget" type="number" />
-            </ion-item>
-            <ion-item>
-              <ion-label position="stacked">Entreprise</ion-label>
-              <ion-select v-model="draft.entrepriseId" placeholder="Choisir">
-                <ion-select-option
-                  v-for="item in entreprises"
-                  :key="item.id"
-                  :value="item.id"
-                >
-                  {{ item.label }}
-                </ion-select-option>
-              </ion-select>
-            </ion-item>
-            <ion-item>
-              <ion-label position="stacked">Statut</ion-label>
-              <ion-select v-model="draft.statusId" placeholder="Choisir">
-                <ion-select-option
-                  v-for="item in statuses"
-                  :key="item.id"
-                  :value="item.id"
-                >
-                  {{ item.label }}
-                </ion-select-option>
-              </ion-select>
-            </ion-item>
-            <ion-item>
-              <ion-label position="stacked">Description</ion-label>
-              <ion-textarea v-model="draft.description" auto-grow />
             </ion-item>
             <ion-item>
               <ion-label position="stacked">Photos</ion-label>
@@ -121,9 +84,6 @@ import {
   IonList,
   IonModal,
   IonPage,
-  IonSelect,
-  IonSelectOption,
-  IonTextarea,
   IonToast,
   IonTitle,
   IonToolbar
@@ -136,9 +96,7 @@ import { initCarte, type CarteInstance } from '@/services/CarteService';
 import {
   applyMapSelection,
   createSignalementDraft,
-  fetchEntreprises,
   fetchQuartiers,
-  fetchStatuses,
   listenSignalements,
   saveSignalement,
   updateDraftPhotos,
@@ -151,8 +109,6 @@ import 'leaflet/dist/leaflet.css';
 const router = useRouter();
 let carteInstance: CarteInstance | null = null;
 const showSignalModal = ref(false);
-const entreprises = ref<SelectOption[]>([]);
-const statuses = ref<SelectOption[]>([]);
 const quartiers = ref<QuartierRef[]>([]);
 const draft = ref<SignalementDraft>(createSignalementDraft(getUserId(), getUserEmail()));
 const saving = ref(false);
@@ -161,10 +117,6 @@ const toastMessage = ref('');
 const toastColor = ref<'success' | 'danger'>('success');
 let signalementLayer: L.LayerGroup | null = null;
 let signalementUnsub: (() => void) | null = null;
-
-const openSignalementForm = () => {
-  showSignalModal.value = true;
-};
 
 const handleMapClick = async (event: LeafletMouseEvent) => {
   draft.value = await applyMapSelection(
@@ -233,17 +185,38 @@ const renderSignalements = (items: any[]) => {
 
   signalementLayer.clearLayers();
 
+  const statusIcons: Record<string, string> = {
+    nouveau: '🆕',
+    en_cours: '⚠️',
+    termine: '✅'
+  };
+
   for (const item of items) {
     if (item.latitude == null || item.longitude == null) continue;
-    const marker = L.marker([item.latitude, item.longitude]);
-    const status = item.status || item.statusId || 'nouveau';
+    const status = String(item.status || item.statusId || 'nouveau');
+    const normalizedStatus = status.toLowerCase();
+    const iconLabel = statusIcons[normalizedStatus] || '📍';
+    const icon = L.divIcon({
+      className: 'signalement-icon',
+      html: `<span>${iconLabel}</span>`
+    });
+    const marker = L.marker([item.latitude, item.longitude], { icon });
+    const photoLinks = Array.isArray(item.photos)
+      ? item.photos
+          .map((photo: any) => photo?.url)
+          .filter(Boolean)
+          .map((url: string) => `<a href="${url}" target="_blank">Photo</a>`)
+          .join(' | ')
+      : '';
     const content = `
-      <strong>${item.quartierLabel || item.quartierId || 'Quartier'}</strong><br />
+      <strong>${item.provinceId || 'Antananarivo'}</strong><br />
+      Quartier: ${item.quartierLabel || item.quartierId || 'Quartier'}<br />
       Date: ${item.date_ || ''}<br />
       Statut: ${status}<br />
       Surface: ${item.surface || ''} m2<br />
       Budget: ${item.budget || ''}<br />
-      Entreprise: ${item.entrepriseId || ''}
+      Entreprise: ${item.entrepriseId || ''}<br />
+      ${photoLinks}
     `;
     marker.bindPopup(content);
     marker.addTo(signalementLayer);
@@ -255,10 +228,8 @@ onMounted(() => {
   carteInstance.map.on('click', handleMapClick);
   signalementLayer = L.layerGroup().addTo(carteInstance.map);
 
-  Promise.all([fetchEntreprises(), fetchStatuses(), fetchQuartiers()])
-    .then(([entreprisesData, statusesData, quartiersData]) => {
-      entreprises.value = entreprisesData;
-      statuses.value = statusesData;
+  fetchQuartiers()
+    .then((quartiersData) => {
       quartiers.value = quartiersData;
     })
     .catch(() => {
@@ -297,5 +268,14 @@ const handleLogout = async () => {
 .map-container {
   height: 100%;
   width: 100%;
+}
+
+.signalement-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  font-size: 22px;
 }
 </style>
