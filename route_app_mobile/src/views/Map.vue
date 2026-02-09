@@ -17,6 +17,12 @@
 
     <ion-content>
       <div id="map" class="map-container"></div>
+      <div class="summary-panel">
+        <div class="summary-item">Points: {{ summary.totalPoints }}</div>
+        <div class="summary-item">Surface: {{ summary.totalSurface }} m2</div>
+        <div class="summary-item">Avancement: {{ summary.avancement }}%</div>
+        <div class="summary-item">Budget: {{ summary.totalBudget }}</div>
+      </div>
 
       <ion-modal :is-open="showSignalModal" @didDismiss="showSignalModal = false">
         <ion-header>
@@ -96,7 +102,7 @@ import {
   IonToolbar
 } from '@ionic/vue';
 import L, { type LeafletMouseEvent } from 'leaflet';
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { clearSession, logoutUser } from '@/services/LoginService';
 import { initCarte, type CarteInstance } from '@/services/CarteService';
@@ -126,6 +132,34 @@ const toastColor = ref<'success' | 'danger'>('success');
 let signalementLayer: L.LayerGroup | null = null;
 let signalementUnsub: (() => void) | null = null;
 const currentUserId = getUserId();
+const visibleSignalements = ref<any[]>([]);
+
+const summary = computed(() => {
+  const totalPoints = visibleSignalements.value.length;
+  const totalSurface = visibleSignalements.value.reduce((sum, item) => {
+    const value = Number(item.surface ?? 0);
+    return sum + (Number.isFinite(value) ? value : 0);
+  }, 0);
+  const totalBudget = visibleSignalements.value.reduce((sum, item) => {
+    const value = Number(item.budget ?? 0);
+    return sum + (Number.isFinite(value) ? value : 0);
+  }, 0);
+
+  const totalProgress = visibleSignalements.value.reduce((sum, item) => {
+    const status = String(item.status || item.statusId || 'nouveau').toLowerCase();
+    if (status === 'termine') return sum + 100;
+    if (status === 'en_cours') return sum + 50;
+    return sum + 0;
+  }, 0);
+  const avancement = totalPoints ? Math.round(totalProgress / totalPoints) : 0;
+
+  return {
+    totalPoints,
+    totalSurface: Math.round(totalSurface * 100) / 100,
+    totalBudget: Math.round(totalBudget * 100) / 100,
+    avancement
+  };
+});
 
 const handleMapClick = async (event: LeafletMouseEvent) => {
   draft.value = await applyMapSelection(
@@ -204,6 +238,8 @@ const renderSignalements = (items: any[]) => {
     ? items.filter((item) => item.userId === currentUserId)
     : items;
 
+  visibleSignalements.value = visibleItems;
+
   for (const item of visibleItems) {
     if (item.latitude == null || item.longitude == null) continue;
     const status = String(item.status || item.statusId || 'nouveau');
@@ -281,6 +317,27 @@ const handleLogout = async () => {
 .map-container {
   height: 100%;
   width: 100%;
+}
+
+.summary-panel {
+  position: absolute;
+  top: 64px;
+  left: 12px;
+  right: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  font-size: 14px;
+}
+
+.summary-item {
+  color: #1f2933;
+  font-weight: 600;
 }
 
 .signalement-icon {
