@@ -7,6 +7,12 @@
           <ion-button @click="handleLogout">Deconnexion</ion-button>
         </ion-buttons>
       </ion-toolbar>
+      <ion-toolbar>
+        <ion-item lines="none">
+          <ion-label>Mes signalements</ion-label>
+          <ion-toggle v-model="showMineOnly" />
+        </ion-item>
+      </ion-toolbar>
     </ion-header>
 
     <ion-content>
@@ -84,6 +90,7 @@ import {
   IonList,
   IonModal,
   IonPage,
+  IonToggle,
   IonToast,
   IonTitle,
   IonToolbar
@@ -111,12 +118,14 @@ let carteInstance: CarteInstance | null = null;
 const showSignalModal = ref(false);
 const quartiers = ref<QuartierRef[]>([]);
 const draft = ref<SignalementDraft>(createSignalementDraft(getUserId(), getUserEmail()));
+const showMineOnly = ref(false);
 const saving = ref(false);
 const toastOpen = ref(false);
 const toastMessage = ref('');
 const toastColor = ref<'success' | 'danger'>('success');
 let signalementLayer: L.LayerGroup | null = null;
 let signalementUnsub: (() => void) | null = null;
+const currentUserId = getUserId();
 
 const handleMapClick = async (event: LeafletMouseEvent) => {
   draft.value = await applyMapSelection(
@@ -191,7 +200,11 @@ const renderSignalements = (items: any[]) => {
     termine: '✅'
   };
 
-  for (const item of items) {
+  const visibleItems = showMineOnly.value
+    ? items.filter((item) => item.userId === currentUserId)
+    : items;
+
+  for (const item of visibleItems) {
     if (item.latitude == null || item.longitude == null) continue;
     const status = String(item.status || item.statusId || 'nouveau');
     const normalizedStatus = status.toLowerCase();
