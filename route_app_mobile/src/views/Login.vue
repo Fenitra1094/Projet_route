@@ -79,8 +79,8 @@ import { useRouter } from 'vue-router';
 import { loginWithEmail } from '@/services/LoginService';
 
 const router = useRouter();
-const email = ref('bemaso@gmail.com');
-const password = ref('bemasooo');
+const email = ref('test@gmail.com');
+const password = ref('test123');
 const showPassword = ref(false);
 const passwordType = computed(() => (showPassword.value ? 'text' : 'password'));
 const loading = ref(false);

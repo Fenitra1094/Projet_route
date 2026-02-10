@@ -54,29 +54,30 @@ if (import.meta.env.DEV) {
 export type SignalementPayload = {
   latitude: number;
   longitude: number;
-  quartierId?: string;
-  quartierLabel?: string;
-  provinceId?: string;
-  entrepriseId?: string;
-  statusId?: string;
+  quartier?: string;
+  province?: string;
+  id_entreprise?: number | null;
+  id_status?: number | null;
   surface: string;
   budget: string;
-  description?: string;
   date_?: string;
-  userId: string;
-  userEmail?: string;
+  id_user: number;
+  user_email?: string;
 };
 
 export const addSignalement = async (signalementData: SignalementPayload) => {
   try {
-    const docRef = await addDoc(collection(db, "signalements"), {
+    const idSignalement = Date.now();
+    const docRef = await addDoc(collection(db, "signalement"), {
+      id_signalement: idSignalement,
       ...signalementData,
-      status: signalementData.statusId || "nouveau",
-      photos: [],
+      source: 'mobile',
+      last_sync: Timestamp.now(),
       dateCreation: Timestamp.now(),
       dateModification: Timestamp.now()
     });
-    return docRef.id;
+    await updateDoc(docRef, { firebase_doc_id: docRef.id });
+    return { docId: docRef.id, idSignalement };
   } catch (error) {
     console.error("Erreur lors de l'ajout du signalement:", error);
     throw error;
@@ -88,7 +89,7 @@ export const addSignalement = async (signalementData: SignalementPayload) => {
  */
 export const getAllSignalements = async () => {
   try {
-    const querySnapshot = await getDocs(collection(db, "signalements"));
+    const querySnapshot = await getDocs(collection(db, "signalement"));
     const signalements: any[] = [];
     
     querySnapshot.forEach((doc) => {
@@ -111,8 +112,8 @@ export const getAllSignalements = async () => {
 export const getUserSignalements = async (userId: string) => {
   try {
     const q = query(
-      collection(db, "signalements"),
-      where("userId", "==", userId)
+      collection(db, "signalement"),
+      where("id_user", "==", Number(userId))
     );
     
     const querySnapshot = await getDocs(q);
@@ -140,7 +141,7 @@ export const updateSignalementStatus = async (
   newStatus: string
 ) => {
   try {
-    const docRef = doc(db, "signalements", signalementId);
+    const docRef = doc(db, "signalement", signalementId);
     await updateDoc(docRef, {
       status: newStatus,
       dateModification: Timestamp.now()
@@ -159,7 +160,7 @@ export const onSignalementChange = (
   callback: (data: any) => void,
   onError?: (error: any) => void
 ) => {
-  const docRef = doc(db, "signalements", signalementId);
+  const docRef = doc(db, "signalement", signalementId);
   return onSnapshot(docRef, (doc) => {
     if (doc.exists()) {
       callback({
@@ -179,7 +180,7 @@ export const onAllSignalementsChange = (
   callback: (signalements: any[]) => void,
   onError?: (error: any) => void
 ) => {
-  return onSnapshot(collection(db, "signalements"), (snapshot) => {
+  return onSnapshot(collection(db, "signalement"), (snapshot) => {
     const signalements: any[] = [];
     snapshot.forEach((doc) => {
       signalements.push({
@@ -193,7 +194,26 @@ export const onAllSignalementsChange = (
   });
 };
 
-// ==================== PHOTOS ====================
+/**
+ * Récupérer les photos d'un signalement depuis photo_signalement
+ */
+export const getPhotosForSignalement = async (idSignalement: number): Promise<string[]> => {
+  try {
+    const q = query(
+      collection(db, 'photo_signalement'),
+      where('id_signalement', '==', idSignalement)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs
+      .map(d => d.data().photo_signalement_url as string)
+      .filter(Boolean);
+  } catch (error) {
+    console.error('Erreur récupération photos:', error);
+    return [];
+  }
+};
+
+// ==================== PHOTOS ==
 
 /**
  * Uploader une photo vers Firebase Storage
@@ -223,23 +243,17 @@ export const uploadPhoto = async (
  * Ajouter une URL de photo à un signalement
  */
 export const addPhotoToSignalement = async (
-  signalementId: string,
+  signalementDocId: string,
+  idSignalement: number,
   photoURL: string
 ) => {
   try {
-    const docRef = doc(db, "signalements", signalementId);
-    const docSnapshot = await getDoc(docRef);
-    
-    if (docSnapshot.exists()) {
-      const currentPhotos = docSnapshot.data().photos || [];
-      await updateDoc(docRef, {
-        photos: [...currentPhotos, {
-          url: photoURL,
-          dateUpload: Timestamp.now()
-        }],
-        dateModification: Timestamp.now()
-      });
-    }
+    // Stocker uniquement dans la collection photo_signalement
+    await addDoc(collection(db, 'photo_signalement'), {
+      id_photo_signalement: Date.now(),
+      id_signalement: idSignalement,
+      photo_signalement_url: photoURL
+    });
   } catch (error) {
     console.error("Erreur lors de l'ajout de la photo:", error);
     throw error;

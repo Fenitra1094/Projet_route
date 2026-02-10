@@ -9,19 +9,41 @@
       </ion-toolbar>
       <ion-toolbar>
         <ion-item lines="none">
-          <ion-label>Mes signalements</ion-label>
+          <ion-label>Afficher mes signalements uniquement</ion-label>
           <ion-toggle v-model="showMineOnly" />
         </ion-item>
       </ion-toolbar>
     </ion-header>
 
     <ion-content>
-      <div id="map" class="map-container"></div>
-      <div class="summary-panel">
-        <div class="summary-item">Points: {{ summary.totalPoints }}</div>
-        <div class="summary-item">Surface: {{ summary.totalSurface }} m2</div>
-        <div class="summary-item">Avancement: {{ summary.avancement }}%</div>
-        <div class="summary-item">Budget: {{ summary.totalBudget }}</div>
+      <div class="map-wrapper">
+        <!-- PANNEAU PHOTOS (gauche) -->
+        <div v-if="selectedPhotos.length" class="photo-panel">
+          <div class="photo-panel-header">
+            <strong>Photos du signalement</strong>
+            <ion-button fill="clear" size="small" @click="selectedPhotos = []">✕</ion-button>
+          </div>
+          <div class="photo-panel-body">
+            <img
+              v-for="(url, i) in selectedPhotos"
+              :key="i"
+              :src="url"
+              :alt="'Photo ' + (i + 1)"
+              class="photo-full"
+            />
+          </div>
+        </div>
+
+        <!-- CARTE -->
+        <div class="map-side">
+          <div id="map" class="map-container"></div>
+          <div class="summary-panel">
+            <div class="summary-item">Points: {{ summary.totalPoints }}</div>
+            <div class="summary-item">Surface: {{ summary.totalSurface }} m2</div>
+            <div class="summary-item">Avancement: {{ summary.avancement }}%</div>
+            <div class="summary-item">Budget: {{ summary.totalBudget }}</div>
+          </div>
+        </div>
       </div>
 
       <ion-modal :is-open="showSignalModal" @didDismiss="showSignalModal = false">
@@ -41,7 +63,7 @@
             </ion-item>
             <ion-item>
               <ion-label position="stacked">Province</ion-label>
-              <ion-input :value="draft.provinceId" readonly />
+              <ion-input :value="draft.province" readonly />
             </ion-item>
             <ion-item>
               <ion-label position="stacked">Quartier</ion-label>
@@ -102,20 +124,21 @@ import {
   IonToolbar
 } from '@ionic/vue';
 import L, { type LeafletMouseEvent } from 'leaflet';
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { clearSession, logoutUser } from '@/services/LoginService';
 import { initCarte, type CarteInstance } from '@/services/CarteService';
+import { getPhotosForSignalement } from '@/services/firebaseService';
 import {
   applyMapSelection,
   createSignalementDraft,
   fetchQuartiers,
+  fetchStatuses,
   listenSignalements,
   saveSignalement,
   updateDraftPhotos,
   type QuartierRef,
-  type SignalementDraft,
-  type SelectOption
+  type SignalementDraft
 } from '@/services/SignalementService';
 import 'leaflet/dist/leaflet.css';
 
@@ -128,11 +151,14 @@ const showMineOnly = ref(false);
 const saving = ref(false);
 const toastOpen = ref(false);
 const toastMessage = ref('');
+const selectedPhotos = ref<string[]>([]);
 const toastColor = ref<'success' | 'danger'>('success');
 let signalementLayer: L.LayerGroup | null = null;
 let signalementUnsub: (() => void) | null = null;
 const currentUserId = getUserId();
+const allSignalements = ref<any[]>([]);
 const visibleSignalements = ref<any[]>([]);
+const statusLabelById = ref<Map<number, string>>(new Map());
 
 const summary = computed(() => {
   const totalPoints = visibleSignalements.value.length;
@@ -146,9 +172,9 @@ const summary = computed(() => {
   }, 0);
 
   const totalProgress = visibleSignalements.value.reduce((sum, item) => {
-    const status = String(item.status || item.statusId || 'nouveau').toLowerCase();
+    const status = getStatusLabel(item);
     if (status === 'termine') return sum + 100;
-    if (status === 'en_cours') return sum + 50;
+    if (status === 'en cours') return sum + 50;
     return sum + 0;
   }, 0);
   const avancement = totalPoints ? Math.round(totalProgress / totalPoints) : 0;
@@ -195,17 +221,42 @@ const handleSave = async () => {
   }
 };
 
-function getUserId(): string {
+function getUserId(): number {
   const raw = localStorage.getItem('user');
-  if (!raw) return '';
+  if (!raw) return 0;
 
   try {
     const parsed = JSON.parse(raw);
-    return parsed?.uid || '';
+    return Number(parsed?.id_user || 0);
   } catch {
-    return '';
+    return 0;
   }
 }
+
+const normalizeStatusLabel = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace('_', ' ');
+
+const getStatusLabel = (item: any) => {
+  const raw = item.status || item.statusLabel || item.statusId || item.id_status;
+  if (typeof raw === 'string') {
+    const normalized = normalizeStatusLabel(raw);
+    if (normalized.includes('en cours')) return 'en cours';
+    if (normalized.includes('termine')) return 'termine';
+    if (normalized.includes('nouveau')) return 'nouveau';
+  }
+
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric)) {
+    const label = statusLabelById.value.get(numeric);
+    if (label) return normalizeStatusLabel(label);
+  }
+
+  return 'nouveau';
+};
 
 function getUserEmail(): string {
   const raw = localStorage.getItem('user');
@@ -220,6 +271,11 @@ function getUserEmail(): string {
 }
 
 const renderSignalements = (items: any[]) => {
+  allSignalements.value = items;
+  applyFilter();
+};
+
+const applyFilter = () => {
   if (!carteInstance) return;
 
   if (!signalementLayer) {
@@ -230,19 +286,20 @@ const renderSignalements = (items: any[]) => {
 
   const statusIcons: Record<string, string> = {
     nouveau: '🆕',
-    en_cours: '⚠️',
+    'en cours': '⚠️',
     termine: '✅'
   };
 
+  const items = allSignalements.value;
   const visibleItems = showMineOnly.value
-    ? items.filter((item) => item.userId === currentUserId)
+    ? items.filter((item) => Number(item.id_user) === currentUserId)
     : items;
 
   visibleSignalements.value = visibleItems;
 
   for (const item of visibleItems) {
     if (item.latitude == null || item.longitude == null) continue;
-    const status = String(item.status || item.statusId || 'nouveau');
+    const status = getStatusLabel(item);
     const normalizedStatus = status.toLowerCase();
     const iconLabel = statusIcons[normalizedStatus] || '📍';
     const icon = L.divIcon({
@@ -250,27 +307,45 @@ const renderSignalements = (items: any[]) => {
       html: `<span>${iconLabel}</span>`
     });
     const marker = L.marker([item.latitude, item.longitude], { icon });
-    const photoLinks = Array.isArray(item.photos)
-      ? item.photos
-          .map((photo: any) => photo?.url)
-          .filter(Boolean)
-          .map((url: string) => `<a href="${url}" target="_blank">Photo</a>`)
-          .join(' | ')
-      : '';
+    const idSig = item.id_signalement;
     const content = `
-      <strong>${item.provinceId || 'Antananarivo'}</strong><br />
-      Quartier: ${item.quartierLabel || item.quartierId || 'Quartier'}<br />
+      <strong>${item.province || item.provinceId || 'Antananarivo'}</strong><br />
+      Quartier: ${item.quartier || item.quartierLabel || item.quartierId || 'Quartier'}<br />
       Date: ${item.date_ || ''}<br />
       Statut: ${status}<br />
       Surface: ${item.surface || ''} m2<br />
       Budget: ${item.budget || ''}<br />
-      Entreprise: ${item.entrepriseId || ''}<br />
-      ${photoLinks}
+      Entreprise: ${item.id_entreprise || item.entrepriseId || ''}<br />
+      <span class="photo-placeholder" data-id="${idSig}">Chargement photos...</span>
     `;
     marker.bindPopup(content);
+    marker.on('popupopen', async () => {
+      if (!idSig) return;
+      const urls = await getPhotosForSignalement(idSig);
+      const el = document.querySelector(`.photo-placeholder[data-id="${idSig}"]`);
+      if (el) {
+        if (urls.length) {
+          el.innerHTML = `<a href="#" class="voir-photos-link" data-id="${idSig}">📷 Voir photos (${urls.length})</a>`;
+          const link = el.querySelector('.voir-photos-link');
+          if (link) {
+            link.addEventListener('click', (e) => {
+              e.preventDefault();
+              selectedPhotos.value = urls;
+            });
+          }
+        } else {
+          el.textContent = 'Aucune photo';
+        }
+      }
+    });
     marker.addTo(signalementLayer);
   }
 };
+
+// Re-filtrer quand le toggle change
+watch(showMineOnly, () => {
+  applyFilter();
+});
 
 onMounted(() => {
   carteInstance = initCarte('map');
@@ -280,6 +355,21 @@ onMounted(() => {
   fetchQuartiers()
     .then((quartiersData) => {
       quartiers.value = quartiersData;
+    })
+    .catch(() => {
+      // Ignore load errors for now.
+    });
+
+  fetchStatuses()
+    .then((options) => {
+      const map = new Map<number, string>();
+      for (const option of options) {
+        const id = Number(option.id);
+        if (Number.isFinite(id)) {
+          map.set(id, option.label);
+        }
+      }
+      statusLabelById.value = map;
     })
     .catch(() => {
       // Ignore load errors for now.
@@ -314,6 +404,59 @@ const handleLogout = async () => {
 </script>
 
 <style scoped>
+.map-wrapper {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  position: relative;
+}
+
+.photo-panel {
+  width: 280px;
+  min-width: 220px;
+  max-width: 40%;
+  height: 100%;
+  overflow-y: auto;
+  background: #f8f9fa;
+  border-right: 2px solid #dee2e6;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+}
+
+.photo-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #fff;
+  border-bottom: 1px solid #dee2e6;
+  font-size: 14px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.photo-panel-body {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.photo-full {
+  width: 100%;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  object-fit: contain;
+}
+
+.map-side {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
 .map-container {
   height: 100%;
   width: 100%;

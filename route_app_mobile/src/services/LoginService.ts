@@ -1,12 +1,12 @@
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import {
+  addDoc,
   collection,
   doc,
   getDoc,
   getDocs,
   onSnapshot,
   query,
-  setDoc,
   Timestamp,
   updateDoc,
   where
@@ -20,10 +20,11 @@ type LoginResult = {
 
 const SESSION_KEY = 'session';
 let userStatusUnsub: (() => void) | null = null;
-let userStatusUserId: string | null = null;
+let userStatusUserId: number | null = null;
 
 type SessionInfo = {
   userId: string;
+  idUser?: number;
   createdAt: number;
   expiresAt: number;
 };
@@ -32,6 +33,20 @@ type SecurityConfig = {
   maxAttempts: number;
   sessionDurationSec: number;
 };
+
+type UserRecord = {
+  docId: string;
+  idUser: number;
+  email: string;
+  data: Record<string, any>;
+};
+
+type StatusBlocageCache = {
+  byId: Map<number, string>;
+  byLabel: Map<string, number>;
+};
+
+let statusBlocageCache: StatusBlocageCache | null = null;
 
 const normalizeTimestamp = (value: any): Date | null => {
   if (!value) return null;
@@ -48,29 +63,113 @@ const normalizeStatus = (value: any): string => {
     .replace(/[\u0300-\u036f]/g, '');
 };
 
-const getStatusInfo = (data: Record<string, any>) => {
-  const statusBlocageId =
-    data.Id_status_blocage || data.statusBlocageId || data.status_blocage;
-  const normalized = normalizeStatus(statusBlocageId);
-  const isDebloque = normalized === 'debloque';
-  const isBlockedByStatus = normalized === 'bloque';
-  const rawIsBlocked = Boolean(data.isBlocked);
+const getLoginAttempts = (data: Record<string, any>) => {
+  const raw =
+    data?.tentatives_echouees ??
+    data?.loginAttempts ??
+    data?.login_attempts ??
+    data?.tentatives ??
+    0;
+  return Number(raw) || 0;
+};
 
+const normalizeUserRecord = (docSnap: any): UserRecord => {
+  const data = docSnap.data() || {};
+  const idUser = Number(data.id_user ?? data.Id_user ?? data.idUser ?? 0);
   return {
-    statusBlocageId: normalized || statusBlocageId,
-    isDebloque,
-    isBlockedByStatus,
-    rawIsBlocked
+    docId: docSnap.id,
+    idUser,
+    email: String(data.email || ''),
+    data
   };
 };
 
-const computeBlockedState = (data: Record<string, any>) => {
-  const statusInfo = getStatusInfo(data);
-  const isBlocked = statusInfo.isDebloque
-    ? false
-    : statusInfo.rawIsBlocked || statusInfo.isBlockedByStatus;
+const getStatusBlocageCache = async (): Promise<StatusBlocageCache> => {
+  if (statusBlocageCache) return statusBlocageCache;
 
-  return { ...statusInfo, isBlocked };
+  const snapshot = await getDocs(collection(db, 'status_blocage'));
+  const byId = new Map<number, string>();
+  const byLabel = new Map<string, number>();
+
+  snapshot.forEach((docSnap) => {
+    const data = docSnap.data() as any;
+    const rawId = data.id_status_blocage ?? data.Id_status_blocage ?? data.id_status;
+    const id = Number(rawId);
+    if (!Number.isFinite(id)) return;
+
+    const label = data.status || data.libelle || data.label || docSnap.id;
+    const normalized = normalizeStatus(label);
+    byId.set(id, normalized);
+    if (normalized) {
+      byLabel.set(normalized, id);
+    }
+  });
+
+  statusBlocageCache = { byId, byLabel };
+  return statusBlocageCache;
+};
+
+const getStatusBlocageId = async (label: string) => {
+  const cache = await getStatusBlocageCache();
+  const normalized = normalizeStatus(label);
+  return cache.byLabel.get(normalized) ?? null;
+};
+
+const getStatusBlocageLabel = async (idStatus: number) => {
+  const cache = await getStatusBlocageCache();
+  return cache.byId.get(idStatus) || '';
+};
+
+const getLatestBlocageForUser = async (idUser: number) => {
+  const q = query(
+    collection(db, 'historique_blocage'),
+    where('id_user', '==', idUser)
+  );
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return null;
+
+  // Sort client-side to avoid composite index requirement
+  const sorted = snapshot.docs
+    .map((d) => d.data() as any)
+    .sort((a, b) => {
+      const da = normalizeTimestamp(a.date_ || a.date);
+      const db2 = normalizeTimestamp(b.date_ || b.date);
+      return (db2?.getTime() ?? 0) - (da?.getTime() ?? 0);
+    });
+
+  const data = sorted[0];
+  const idStatus = Number(
+    data.id_status_blocage ?? data.Id_status_blocage ?? data.status_blocage ?? 0
+  );
+
+  return {
+    idStatus,
+    date: normalizeTimestamp(data.date_ || data.date)
+  };
+};
+
+const getUserBlockState = async (idUser: number) => {
+  const latest = await getLatestBlocageForUser(idUser);
+  if (!latest?.idStatus) {
+    return {
+      isBlocked: false,
+      isDebloque: true,
+      statusId: null,
+      statusLabel: 'debloque',
+      blockedUntil: null
+    };
+  }
+
+  const statusLabel = await getStatusBlocageLabel(latest.idStatus);
+  const normalized = normalizeStatus(statusLabel);
+
+  return {
+    isBlocked: normalized === 'bloque',
+    isDebloque: normalized === 'debloque',
+    statusId: latest.idStatus,
+    statusLabel: normalized,
+    blockedUntil: latest.date
+  };
 };
 
 export const getSecurityConfig = async (): Promise<SecurityConfig> => {
@@ -85,13 +184,21 @@ export const getSecurityConfig = async (): Promise<SecurityConfig> => {
 };
 
 export const findUserByEmail = async (email: string) => {
-  const q = query(collection(db, 'users'), where('email', '==', email));
+  const q = query(collection(db, 'user_'), where('email', '==', email));
   const snapshot = await getDocs(q);
 
   if (snapshot.empty) return null;
 
-  const first = snapshot.docs[0];
-  return { id: first.id, ...first.data() } as any;
+  return normalizeUserRecord(snapshot.docs[0]);
+};
+
+const findUserByIdUser = async (idUser: number) => {
+  const q = query(collection(db, 'user_'), where('id_user', '==', idUser));
+  const snapshot = await getDocs(q);
+
+  if (snapshot.empty) return null;
+
+  return normalizeUserRecord(snapshot.docs[0]);
 };
 
 export const loginUser = async (email: string, password: string) => {
@@ -110,10 +217,10 @@ export const onAuthChange = (callback: (user: User | null) => void) => {
   return onAuthStateChanged(auth, callback);
 };
 
-export const setSession = (userId: string, durationSec: number) => {
+export const setSession = (userId: string, durationSec: number, idUser?: number) => {
   const createdAt = Date.now();
   const expiresAt = createdAt + durationSec * 1000;
-  const payload: SessionInfo = { userId, createdAt, expiresAt };
+  const payload: SessionInfo = { userId, createdAt, expiresAt, idUser };
   localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
 };
 
@@ -140,28 +247,33 @@ export const clearSession = () => {
   localStorage.removeItem('user');
 };
 
-export const startUserStatusListener = (userId: string) => {
-  if (userStatusUnsub && userStatusUserId === userId) return;
+export const startUserStatusListener = (idUser: number) => {
+  if (!idUser) return;
+  if (userStatusUnsub && userStatusUserId === idUser) return;
 
   stopUserStatusListener();
-  userStatusUserId = userId;
+  userStatusUserId = idUser;
 
-  const userDocRef = doc(db, 'users', userId);
-  userStatusUnsub = onSnapshot(userDocRef, async (snapshot) => {
-    if (!snapshot.exists()) return;
+  let isFirstSnapshot = true;
+  const q = query(collection(db, 'historique_blocage'), where('id_user', '==', idUser));
+  userStatusUnsub = onSnapshot(q, async () => {
+    // Skip the initial snapshot to avoid false "unblocked" events
+    if (isFirstSnapshot) {
+      isFirstSnapshot = false;
+      return;
+    }
 
-    const data = snapshot.data();
-    const { isDebloque, rawIsBlocked } = computeBlockedState(data);
-    const loginAttempts = data.loginAttempts || 0;
-
-    if (isDebloque && (rawIsBlocked || loginAttempts > 0)) {
-      await updateDoc(userDocRef, {
-        isBlocked: false,
-        loginAttempts: 0,
-        blockedUntil: null,
-        updatedAt: Timestamp.now()
-      });
-      window.dispatchEvent(new CustomEvent('user-unblocked'));
+    const status = await getUserBlockState(idUser);
+    // Only reset if there's in actual debloque entry (statusId !== null)
+    if (status.isDebloque && status.statusId !== null) {
+      const userDoc = await findUserByIdUser(idUser);
+      if (userDoc && getLoginAttempts(userDoc.data) > 0) {
+        await updateDoc(doc(db, 'user_', userDoc.docId), {
+          tentatives_echouees: 0,
+          last_sync: Timestamp.now()
+        });
+        window.dispatchEvent(new CustomEvent('user-unblocked'));
+      }
     }
   });
 };
@@ -175,56 +287,57 @@ export const stopUserStatusListener = () => {
 };
 
 export const syncUserProfile = async (user: User) => {
-  const userDocRef = doc(db, 'users', user.uid);
-  const snapshot = await getDoc(userDocRef);
-  const now = Timestamp.now();
   const email = user.email || '';
   const nom = user.displayName || (email ? email.split('@')[0] : 'utilisateur');
+  const existing = await findUserByEmail(email);
+  const now = Timestamp.now();
 
-  if (!snapshot.exists()) {
-    await setDoc(userDocRef, {
-      uid: user.uid,
+  if (!existing) {
+    const rolesSnap = await getDocs(query(collection(db, 'role'), where('libelle', '==', 'utilisateur')));
+    const roleDoc = rolesSnap.docs[0];
+    const roleData = roleDoc?.data() as any;
+    const roleId = Number(roleData?.id_role ?? roleData?.Id_role ?? 0) || 0;
+
+    await addDoc(collection(db, 'user_'), {
+      id_user: Date.now(),
       email,
+      firebase_uid: user.uid,
+      id_role: roleId,
       nom,
-      Id_role: 'user',
-      Id_status_blocage: 'debloque',
-      loginAttempts: 0,
-      isBlocked: false,
-      blockedUntil: null,
-      createdAt: now,
-      updatedAt: now
+      prenom: '',
+      source: 'mobile',
+      synced: true,
+      last_sync: now,
+      tentatives_echouees: 0
     });
+
     return;
   }
 
-  await updateDoc(userDocRef, {
+  await updateDoc(doc(db, 'user_', existing.docId), {
     email,
+    firebase_uid: user.uid,
     nom,
-    loginAttempts: 0,
-    isBlocked: false,
-    blockedUntil: null,
-    updatedAt: now
+    last_sync: now
   });
 };
 
-export const checkUserBlockStatus = async (userId: string) => {
-  const userDocRef = doc(db, 'users', userId);
-  const userDoc = await getDoc(userDocRef);
-
-  if (userDoc.exists()) {
-    const userData = userDoc.data();
-    const { isBlocked } = computeBlockedState(userData);
+export const checkUserBlockStatus = async (idUser: number) => {
+  if (!idUser) {
     return {
-      isBlocked,
-      blockedUntil: userData.blockedUntil || null,
-      loginAttempts: userData.loginAttempts || 0
+      isBlocked: false,
+      blockedUntil: null,
+      loginAttempts: 0
     };
   }
 
+  const status = await getUserBlockState(idUser);
+  const userDoc = await findUserByIdUser(idUser);
+
   return {
-    isBlocked: false,
-    blockedUntil: null,
-    loginAttempts: 0
+    isBlocked: status.isBlocked,
+    blockedUntil: status.blockedUntil,
+    loginAttempts: userDoc ? getLoginAttempts(userDoc.data) : 0
   };
 };
 
@@ -234,63 +347,57 @@ export const checkUserBlockStatusByEmail = async (email: string) => {
   if (!userData) {
     return {
       exists: false,
-      userId: null,
+      userId: null as number | null,
+      docId: null as string | null,
       isBlocked: false,
       blockedUntil: null,
       loginAttempts: 0
     };
   }
 
-  const { isBlocked, isDebloque, rawIsBlocked } = computeBlockedState(userData);
-  const loginAttempts = userData.loginAttempts || 0;
+  const status = await getUserBlockState(userData.idUser);
+  // Re-read fresh data for accurate attempt count
+  const freshUserDoc = await getDoc(doc(db, 'user_', userData.docId));
+  const freshData = freshUserDoc.exists() ? freshUserDoc.data() : userData.data;
+  const attempts = getLoginAttempts(freshData as Record<string, any>);
 
-  if (isDebloque && (rawIsBlocked || userData.blockedUntil)) {
+  const { maxAttempts } = await getSecurityConfig();
+
+  console.log(`[LoginService] Pre-check: attempts=${attempts}, isBlocked=${status.isBlocked}, isDebloque=${status.isDebloque}, statusId=${status.statusId}, maxAttempts=${maxAttempts}`);
+
+  // Only reset attempts if user was ACTUALLY blocked (attempts >= maxAttempts)
+  // AND an admin has inserted a "debloque" entry in historique_blocage.
+  // This prevents the debloque entry from resetting attempts on every login.
+  if (status.isDebloque && status.statusId !== null && attempts >= maxAttempts) {
     try {
-      await updateDoc(doc(db, 'users', userData.id), {
-        isBlocked: false,
-        loginAttempts: 0,
-        blockedUntil: null,
-        updatedAt: Timestamp.now()
+      await updateDoc(doc(db, 'user_', userData.docId), {
+        tentatives_echouees: 0,
+        last_sync: Timestamp.now()
       });
+      console.log(`[LoginService] Pre-check: reset attempts from ${attempts} to 0 (user was unblocked)`);
       window.dispatchEvent(new CustomEvent('user-unblocked'));
     } catch {
       // Ignore reset failures during pre-check.
     }
+
+    return {
+      exists: true,
+      userId: userData.idUser,
+      docId: userData.docId,
+      isBlocked: false,
+      blockedUntil: null,
+      loginAttempts: 0
+    };
   }
 
   return {
     exists: true,
-    userId: userData.id,
-    isBlocked,
-    blockedUntil: normalizeTimestamp(userData.blockedUntil),
-    loginAttempts: loginAttempts
+    userId: userData.idUser,
+    docId: userData.docId,
+    isBlocked: status.isBlocked,
+    blockedUntil: status.blockedUntil,
+    loginAttempts: attempts
   };
-};
-
-export const incrementLoginAttempts = async (userId: string) => {
-  const { maxAttempts } = await getSecurityConfig();
-  const userDocRef = doc(db, 'users', userId);
-  const userDoc = await getDoc(userDocRef);
-
-  let attempts = 1;
-  if (userDoc.exists()) {
-    attempts = (userDoc.data().loginAttempts || 0) + 1;
-  }
-
-  const isBlocked = attempts >= maxAttempts;
-
-  await setDoc(
-    userDocRef,
-    {
-      loginAttempts: attempts,
-      isBlocked: isBlocked,
-      blockedUntil: isBlocked ? Timestamp.now().toDate() : null,
-      lastFailedLogin: Timestamp.now()
-    },
-    { merge: true }
-  );
-
-  return { attempts, isBlocked };
 };
 
 export const incrementLoginAttemptsByEmail = async (email: string) => {
@@ -301,41 +408,57 @@ export const incrementLoginAttemptsByEmail = async (email: string) => {
     return { attempts: 0, isBlocked: false, maxAttempts };
   }
 
-  const attempts = (userData.loginAttempts || 0) + 1;
+  // Re-read fresh data to avoid stale counts
+  const freshDoc = await getDoc(doc(db, 'user_', userData.docId));
+  const freshData = freshDoc.exists() ? freshDoc.data() : userData.data;
+  const currentAttempts = getLoginAttempts(freshData);
+  const attempts = currentAttempts + 1;
   const isBlocked = attempts >= maxAttempts;
-  const userDocRef = doc(db, 'users', userData.id);
+  const userDocRef = doc(db, 'user_', userData.docId);
+
+  console.log(`[LoginService] Increment: ${currentAttempts} -> ${attempts} / max=${maxAttempts}, blocked=${isBlocked}`);
 
   await updateDoc(userDocRef, {
-    loginAttempts: attempts,
-    isBlocked: isBlocked,
-    Id_status_blocage: isBlocked ? 'bloque' : userData.Id_status_blocage || 'debloque',
-    blockedUntil: isBlocked ? Timestamp.now().toDate() : null,
-    lastFailedLogin: Timestamp.now()
+    tentatives_echouees: attempts,
+    last_sync: Timestamp.now()
   });
+
+  if (isBlocked) {
+    const bloqueId = await getStatusBlocageId('bloque');
+    await addDoc(collection(db, 'historique_blocage'), {
+      id_historique_blocage: Date.now(),
+      id_status_blocage: bloqueId ?? 0,
+      id_user: userData.idUser,
+      date_: Timestamp.now()
+    });
+  }
 
   return { attempts, isBlocked, maxAttempts };
 };
 
-export const resetLoginAttempts = async (userId: string) => {
-  const userDocRef = doc(db, 'users', userId);
-  await setDoc(
-    userDocRef,
-    {
-      loginAttempts: 0,
-      isBlocked: false,
-      blockedUntil: null,
-      lastSuccessfulLogin: Timestamp.now()
-    },
-    { merge: true }
-  );
+export const resetLoginAttempts = async (docId: string) => {
+  const userDocRef = doc(db, 'user_', docId);
+  await updateDoc(userDocRef, {
+    tentatives_echouees: 0,
+    last_sync: Timestamp.now()
+  });
 };
 
 export const loginWithEmail = async (
   email: string,
   password: string
 ): Promise<LoginResult> => {
+  let preStatus: {
+    exists: boolean;
+    userId: number | null;
+    docId: string | null;
+    isBlocked: boolean;
+    blockedUntil: Date | null;
+    loginAttempts: number;
+  };
+
   try {
-    const preStatus = await checkUserBlockStatusByEmail(email);
+    preStatus = await checkUserBlockStatusByEmail(email);
     if (preStatus.isBlocked) {
       return {
         status: 'blocked',
@@ -356,7 +479,10 @@ export const loginWithEmail = async (
   try {
     const { user } = await loginUser(email, password);
     await syncUserProfile(user);
-    const status = await checkUserBlockStatus(user.uid);
+
+    const refreshed = await findUserByEmail(email);
+    const idUser = refreshed?.idUser || preStatus.userId || 0;
+    const status = await checkUserBlockStatus(idUser);
 
     if (status.isBlocked) {
       await logoutUser();
@@ -367,19 +493,47 @@ export const loginWithEmail = async (
     }
 
     const securityConfig = await getSecurityConfig();
-    setSession(user.uid, securityConfig.sessionDurationSec);
-    startUserStatusListener(user.uid);
+    setSession(user.uid, securityConfig.sessionDurationSec, idUser || undefined);
+    if (idUser) {
+      startUserStatusListener(idUser);
+    }
 
     localStorage.setItem('user', JSON.stringify({
       uid: user.uid,
-      email: user.email
+      email: user.email,
+      id_user: idUser
     }));
+
+    if (refreshed?.docId) {
+      await resetLoginAttempts(refreshed.docId);
+    }
 
     return { status: 'success', message: 'Connexion reussie.' };
   } catch (error) {
     console.error('Erreur Firebase Auth:', error);
+    const errorCode = (error as any)?.code || '';
+
+    // auth/too-many-requests = Firebase Auth server-side rate limiting
+    // This is NOT a wrong password — do NOT increment attempts
+    if (errorCode === 'auth/too-many-requests') {
+      console.warn('[LoginService] Firebase Auth rate limit active — not counting as failed attempt');
+      return {
+        status: 'failed',
+        message: 'Trop de tentatives sur ce compte. Veuillez patienter quelques minutes avant de reessayer.'
+      };
+    }
+
+    if (errorCode === 'permission-denied') {
+      return {
+        status: 'failed',
+        message: 'Acces Firestore refuse. Verifiez les rules.'
+      };
+    }
+
+    // Only increment attempts for actual auth failures (wrong password, etc.)
     try {
       const result = await incrementLoginAttemptsByEmail(email);
+      console.log('Tentatives:', result.attempts, '/', result.maxAttempts, 'Bloque:', result.isBlocked);
       const remaining = result.maxAttempts - result.attempts;
 
       if (result.isBlocked) {
@@ -395,16 +549,8 @@ export const loginWithEmail = async (
           message: `Connexion echouee. Tentatives restantes: ${remaining}.`
         };
       }
-    } catch {
-      // Ignore attempt tracking errors and show generic message.
-    }
-
-    const errorCode = (error as any)?.code || '';
-    if (errorCode === 'permission-denied') {
-      return {
-        status: 'failed',
-        message: 'Acces Firestore refuse. Verifiez les rules.'
-      };
+    } catch (incrementError) {
+      console.error('Erreur increment tentatives:', incrementError);
     }
 
     const suffix = errorCode ? ` (${errorCode})` : '';

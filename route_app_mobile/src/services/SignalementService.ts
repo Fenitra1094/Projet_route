@@ -6,16 +6,15 @@ export type SignalementDraft = {
   date_: string;
   surface: string;
   budget: string;
-  description: string;
-  userId: string;
+  idUser: number;
   userEmail: string;
-  entrepriseId: string;
+  idEntreprise: number | null;
   quartierId: string;
   quartierLabel: string;
-  statusId: string;
+  statusId: number;
   latitude: number | null;
   longitude: number | null;
-  provinceId: string;
+  province: string;
   photos: File[];
 };
 
@@ -62,20 +61,19 @@ const getNearestQuartier = (quartiers: QuartierRef[], latitude: number, longitud
   return best;
 };
 
-export const createSignalementDraft = (userId: string, userEmail: string): SignalementDraft => ({
+export const createSignalementDraft = (idUser: number, userEmail: string): SignalementDraft => ({
   date_: new Date().toISOString(),
   surface: '',
   budget: '',
-  description: '',
-  userId,
+  idUser,
   userEmail,
-  entrepriseId: '',
+  idEntreprise: null,
   quartierId: '',
   quartierLabel: '',
-  statusId: 'nouveau',
+  statusId: 1,
   latitude: null,
   longitude: null,
-  provinceId: 'antananarivo',
+  province: 'Antananarivo',
   photos: []
 });
 
@@ -97,7 +95,16 @@ const fetchOptions = async (collectionName: string): Promise<SelectOption[]> => 
   const snapshot = await getDocs(collection(db, collectionName));
   return snapshot.docs.map((docSnap) => {
     const data = docSnap.data() as any;
-    return { id: docSnap.id, label: data.libelle || docSnap.id };
+    const numericId = Number(
+      data.id_status ??
+      data.id_entreprise ??
+      data.id_province ??
+      data.id_role ??
+      data.id_user ??
+      data.id
+    );
+    const idValue = Number.isFinite(numericId) && numericId > 0 ? String(numericId) : docSnap.id;
+    return { id: idValue, label: data.libelle || data.entreprise || data.province || docSnap.id };
   });
 };
 
@@ -134,7 +141,7 @@ export const applyMapSelection = async (
     longitude,
     quartierId: reverse.quartierId,
     quartierLabel: reverse.quartierLabel,
-    provinceId: reverse.provinceId
+    province: 'Antananarivo'
   };
 };
 
@@ -262,20 +269,21 @@ export const saveSignalement = async (draft: SignalementDraft) => {
     throw new Error('Coordonnees manquantes');
   }
 
-  const signalementId = await addSignalement({
+  const idStatus = Number(draft.statusId) || 1;
+  const idEntreprise = draft.idEntreprise ? Number(draft.idEntreprise) : null;
+
+  const signalement = await addSignalement({
     latitude: draft.latitude,
     longitude: draft.longitude,
-    quartierId: draft.quartierId,
-    quartierLabel: draft.quartierLabel,
-    provinceId: draft.provinceId,
-    entrepriseId: draft.entrepriseId,
-    statusId: draft.statusId,
+    quartier: draft.quartierLabel,
+    province: draft.province,
+    id_entreprise: idEntreprise,
+    id_status: idStatus,
     surface: draft.surface,
     budget: draft.budget,
-    description: draft.description,
     date_: draft.date_,
-    userId: draft.userId,
-    userEmail: draft.userEmail
+    id_user: draft.idUser,
+    user_email: draft.userEmail
   });
 
   if (draft.photos.length) {
@@ -285,11 +293,11 @@ export const saveSignalement = async (draft: SignalementDraft) => {
     const uploads = compressed.map((file) => uploadToCloudinary(file));
     const urls = await Promise.all(uploads);
     for (const url of urls) {
-      await addPhotoToSignalement(signalementId, url);
+      await addPhotoToSignalement(signalement.docId, signalement.idSignalement, url);
     }
   }
 
-  return signalementId;
+  return signalement.docId;
 };
 
 export const listenSignalements = (
