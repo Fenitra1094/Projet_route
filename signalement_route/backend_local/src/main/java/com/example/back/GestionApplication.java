@@ -4,14 +4,10 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
-
-import com.google.auth.oauth2.GoogleCredentials;
-import com.google.firebase.FirebaseApp;
-import com.google.firebase.FirebaseOptions;
-
-import java.io.FileInputStream;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
+@EnableScheduling
 public class GestionApplication extends SpringBootServletInitializer {
 
     @Override
@@ -20,20 +16,6 @@ public class GestionApplication extends SpringBootServletInitializer {
     }
 
     public static void main(String[] args) {
-        // 🔹 Initialisation Firebase
-        try {
-            FileInputStream serviceAccount = new FileInputStream("chemin/vers/serviceAccountKey.json");
-
-            FirebaseOptions options = new FirebaseOptions.Builder()
-                    .setCredentials(GoogleCredentials.fromStream(serviceAccount))
-                    .build();
-
-            FirebaseApp.initializeApp(options);
-            System.out.println("Firebase initialisé ✅");
-        } catch (Exception e) {
-            System.out.println("Impossible d'initialiser Firebase : " + e.getMessage());
-        }
-
         SpringApplication.run(GestionApplication.class, args);
     }
 }

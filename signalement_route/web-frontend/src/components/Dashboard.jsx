@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { getSignalementRecapitulatif, syncFromFirebase, syncToFirebase, fullSync } from '../api/signalementApi';
+import { getSignalementRecapitulatif, syncFromFirebase, syncToFirebase, fullSync, getDelaiTraitementMoyen } from '../api/signalementApi';
 import './Dashboard.css';
 import './Dashboard.css';
 
 function Dashboard() {
   const [recapData, setRecapData] = useState(null);
+  const [averageProcessingTime, setAverageProcessingTime] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [syncLoading, setSyncLoading] = useState(false);
@@ -17,8 +18,12 @@ function Dashboard() {
   const loadRecapitulatif = async () => {
     try {
       setLoading(true);
-      const data = await getSignalementRecapitulatif();
+      const [data, avgTime] = await Promise.all([
+        getSignalementRecapitulatif(),
+        getDelaiTraitementMoyen()
+      ]);
       setRecapData(data);
+      setAverageProcessingTime(avgTime);
       setError(null);
     } catch (err) {
       setError(err.message);
@@ -133,6 +138,16 @@ function Dashboard() {
             }
           </div>
         </div>
+
+        <div className="stat-card">
+          <h3>Délai de traitement moyen</h3>
+          <div className="stat-value">
+            {averageProcessingTime !== null ?
+              `${averageProcessingTime.toFixed(1)} jours` :
+              'N/A'
+            }
+          </div>
+        </div>
       </div>
 
       {/* Détails par arrondissement */}
@@ -190,6 +205,7 @@ function Dashboard() {
         <button onClick={handleFullSync} className="sync-btn" disabled={syncLoading}>
           {syncLoading ? 'Sync complète...' : 'Sync complète'}
         </button>
+        <a href="/users" className="link-btn">Voir la liste des utilisateurs</a>
         {syncMessage && <p className="sync-message">{syncMessage}</p>}
         <a href="/" className="back-link">Retour à l'accueil</a>
       </div>
