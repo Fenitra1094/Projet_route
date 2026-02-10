@@ -60,12 +60,17 @@ router.beforeEach(async (to, from, next) => {
   if (requiresAuth && user) {
     try {
       const parsed = JSON.parse(user);
-      if (parsed?.uid) startUserStatusListener(parsed.uid);
+      if (parsed?.id_user) startUserStatusListener(Number(parsed.id_user));
     } catch {
       clearSession();
       next('/login');
       return;
     }
+  }
+
+  // If navigating to login, clean up any stale listener
+  if (to.name === 'Login') {
+    clearSession();
   }
 
   next();
