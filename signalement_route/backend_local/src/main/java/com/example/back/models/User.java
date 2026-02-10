@@ -11,19 +11,19 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id_user;
 
-    @Column(name = "firebase_uid", unique = true, nullable = false)
+    @Column(name = "firebase_uid", unique = true, nullable = true)
     private String firebaseUid;
 
-    @Column(nullable = false, unique = true)
+    @Column(unique = true)
     private String email;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private String password;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private String nom;
 
-    @Column(nullable = false)
+    @Column(nullable = true)
     private Integer id_role;
 
     private String prenom;
