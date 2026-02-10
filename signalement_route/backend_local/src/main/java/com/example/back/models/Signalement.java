@@ -22,6 +22,22 @@ public class Signalement {
     @Column(name = "budget", precision = 15, scale = 2)
     private BigDecimal budget;
 
+    @Column(name = "longitude")
+    private Integer longitude;
+
+    @Column(name = "latitude")
+    private Integer latitude;
+
+    @Column(name = "firebase_doc_id", length = 50)
+    private String firebaseDocId;
+
+    @Column(name = "quartier", length = 50)
+    private String quartier;
+
+    @ManyToOne
+    @JoinColumn(name = "id_province", nullable = false)
+    private Province province;
+
     @ManyToOne
     @JoinColumn(name = "id_user", nullable = false)
     private User user;
@@ -29,10 +45,6 @@ public class Signalement {
     @ManyToOne
     @JoinColumn(name = "id_entreprise")
     private Entreprise entreprise;
-
-    @ManyToOne
-    @JoinColumn(name = "id_quartier", nullable = false)
-    private Quartier quartier;
 
     @ManyToOne
     @JoinColumn(name = "id_status", nullable = false)
@@ -43,13 +55,19 @@ public class Signalement {
 
     // Constructeur pratique
     public Signalement(LocalDateTime date, BigDecimal surface, BigDecimal budget, 
-                       User user, Entreprise entreprise, Quartier quartier, Status status) {
+                       Integer longitude, Integer latitude, String firebaseDocId, 
+                       String quartier, Province province, User user, 
+                       Entreprise entreprise, Status status) {
         this.date = date;
         this.surface = surface;
         this.budget = budget;
+        this.longitude = longitude;
+        this.latitude = latitude;
+        this.firebaseDocId = firebaseDocId;
+        this.quartier = quartier;
+        this.province = province;
         this.user = user;
         this.entreprise = entreprise;
-        this.quartier = quartier;
         this.status = status;
     }
 
@@ -86,6 +104,46 @@ public class Signalement {
         this.budget = budget;
     }
 
+    public Integer getLongitude() {
+        return longitude;
+    }
+
+    public void setLongitude(Integer longitude) {
+        this.longitude = longitude;
+    }
+
+    public Integer getLatitude() {
+        return latitude;
+    }
+
+    public void setLatitude(Integer latitude) {
+        this.latitude = latitude;
+    }
+
+    public String getFirebaseDocId() {
+        return firebaseDocId;
+    }
+
+    public void setFirebaseDocId(String firebaseDocId) {
+        this.firebaseDocId = firebaseDocId;
+    }
+
+    public String getQuartier() {
+        return quartier;
+    }
+
+    public void setQuartier(String quartier) {
+        this.quartier = quartier;
+    }
+
+    public Province getProvince() {
+        return province;
+    }
+
+    public void setProvince(Province province) {
+        this.province = province;
+    }
+
     public User getUser() {
         return user;
     }
@@ -102,13 +160,7 @@ public class Signalement {
         this.entreprise = entreprise;
     }
 
-    public Quartier getQuartier() {
-        return quartier;
-    }
-
-    public void setQuartier(Quartier quartier) {
-        this.quartier = quartier;
-    }
+    
 
     public Status getStatus() {
         return status;
@@ -125,9 +177,13 @@ public class Signalement {
                 ", date=" + date +
                 ", surface=" + surface +
                 ", budget=" + budget +
+                ", longitude=" + longitude +
+                ", latitude=" + latitude +
+                ", firebaseDocId='" + firebaseDocId + '\'' +
+                ", quartier='" + quartier + '\'' +
+                ", province=" + province +
                 ", user=" + user +
                 ", entreprise=" + entreprise +
-                ", quartier=" + quartier +
                 ", status=" + status +
                 '}';
     }

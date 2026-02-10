@@ -74,7 +74,7 @@ public class SignalementController {
         if (payload.getEntreprise() != null && payload.getEntreprise().getIdEntreprise() != null) {
             s.setEntreprise(payload.getEntreprise());
         }
-        if (payload.getQuartier() != null && payload.getQuartier().getId_quartier() != null) {
+        if (payload.getQuartier() != null && payload.getQuartier() != null) {
             s.setQuartier(payload.getQuartier());
         }
         if (payload.getStatus() != null && payload.getStatus().getIdStatus() != null) {
