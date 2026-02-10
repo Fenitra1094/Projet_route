@@ -17,8 +17,12 @@ export const initCarte = (containerId: string): CarteInstance => {
     minZoom: 12,
     maxZoom: 18,
     maxBounds: ANTANANARIVO_BOUNDS,
-    maxBoundsViscosity: 1.0
-  }).setView(ANTANANARIVO_CENTER, 13);
+    maxBoundsViscosity: 1.0,
+    doubleClickZoom: false
+  } as L.MapOptions).setView(ANTANANARIVO_CENTER, 13);
+
+  // Désactiver le tap handler de Leaflet (conflit avec Capacitor/Android)
+  (map as any).tap?.disable();
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors'

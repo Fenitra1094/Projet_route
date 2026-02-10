@@ -1,7 +1,6 @@
 // src/router/index.js
 import { createRouter, createWebHistory } from '@ionic/vue-router';
 import Login from '@/views/Login.vue';
-import Carte from '@/views/Carte.vue';
 import Map from '@/views/Map.vue';
 import { clearSession, isSessionValid, logoutUser, startUserStatusListener } from '@/services/LoginService';
 import { startSignalementNotificationListener } from '@/services/NotificationService';
@@ -21,12 +20,6 @@ const routes = [
     path: '/map',
     name: 'Map',
     component: Map,
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/carte',
-    name: 'Carte',
-    component: Carte,
     meta: { requiresAuth: true }
   }
 ];
