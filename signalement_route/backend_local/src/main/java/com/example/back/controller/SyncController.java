@@ -22,10 +22,14 @@ public class SyncController {
     private FirebaseService firebaseService;
     
     @PostMapping("/to-firebase")
-    @Operation(summary = "Synchroniser vers Firebase", description = "Synchronise toutes les données locales vers Firebase")
+    @Operation(
+        summary = "Synchroniser vers Firebase",
+        description = "Pousse toutes les données locales (utilisateurs, signalements) vers Firebase Firestore. " +
+                     "Cette opération est unidirectionnelle : PostgreSQL → Firebase."
+    )
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Synchronisation vers Firebase réussie"),
-        @ApiResponse(responseCode = "500", description = "Erreur lors de la synchronisation")
+        @ApiResponse(responseCode = "500", description = "Erreur lors de la synchronisation (vérifier connexion internet)")
     })
     public ResponseEntity<String> syncToFirebase() {
         try {
@@ -38,10 +42,15 @@ public class SyncController {
     }
     
     @PostMapping("/from-firebase")
-    @Operation(summary = "Synchroniser depuis Firebase", description = "Synchronise toutes les données Firebase vers la base locale")
+    @Operation(
+        summary = "Synchroniser depuis Firebase",
+        description = "Tire toutes les données Firebase (utilisateurs, signalements) vers la base PostgreSQL locale. " +
+                     "Cette opération est unidirectionnelle : Firebase → PostgreSQL. " +
+                     "Utile pour récupérer des données créées hors ligne."
+    )
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Synchronisation depuis Firebase réussie"),
-        @ApiResponse(responseCode = "500", description = "Erreur lors de la synchronisation")
+        @ApiResponse(responseCode = "500", description = "Erreur lors de la synchronisation (vérifier connexion internet)")
     })
     public ResponseEntity<String> syncFromFirebase() {
         try {
@@ -54,7 +63,11 @@ public class SyncController {
     }
     
     @PostMapping("/full")
-    @Operation(summary = "Synchronisation complète", description = "Effectue une synchronisation bidirectionnelle complète")
+    @Operation(
+        summary = "Synchronisation complète",
+        description = "Effectue une synchronisation bidirectionnelle complète : d'abord PostgreSQL → Firebase, " +
+                     "puis Firebase → PostgreSQL. Utile pour assurer la cohérence des données."
+    )
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Synchronisation complète réussie"),
         @ApiResponse(responseCode = "500", description = "Erreur lors de la synchronisation complète")

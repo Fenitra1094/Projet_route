@@ -10,8 +10,10 @@ com\example\back\models\Status.class
 com\example\back\util\NetworkUtil.class
 com\example\back\service\SignalementService.class
 com\example\back\dto\SignalementSummaryDto.class
+com\example\back\repository\HistoriqueStatusRepository.class
 com\example\back\models\Entreprise.class
 com\example\back\config\FirebaseConfig.class
+com\example\back\models\HistoriqueStatus.class
 com\example\back\models\HistoriqueBlocage.class
 com\example\back\controller\RoleController.class
 com\example\back\models\User.class

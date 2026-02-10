@@ -11,8 +11,8 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id_user;
 
-    @Column(name = "firebase_uid", unique = true, nullable = true)
-    private String firebaseUid;
+    @Column(name = "firebase_doc_id", unique = true, nullable = true)
+    private String firebaseDocId;
 
     @Column(unique = true)
     private String email;
@@ -60,8 +60,8 @@ public class User {
     public String getPrenom() { return prenom; }
     public void setPrenom(String prenom) { this.prenom = prenom; }
 
-    public String getFirebaseUid() { return firebaseUid; }
-    public void setFirebaseUid(String firebaseUid) { this.firebaseUid = firebaseUid; }
+    public String getFirebaseDocId() { return firebaseDocId; }
+    public void setFirebaseDocId(String firebaseDocId) { this.firebaseDocId = firebaseDocId; }
 
     public boolean isSynced() { return synced; }
     public void setSynced(boolean synced) { this.synced = synced; }

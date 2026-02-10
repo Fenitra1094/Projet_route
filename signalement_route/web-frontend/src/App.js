@@ -1,9 +1,9 @@
 import React from "react";
 import Login from "./components/Login";
 import Dashboard from "./components/Dashboard";
-import Users from "./components/Users";
 import Success from "./pages/Success";
 import Failed from "./pages/Failed";
+import UserList from "./pages/UserList";
 
 function App() {
   const path = window.location.pathname;
@@ -11,7 +11,7 @@ function App() {
   if (path === '/success') return <Success />;
   if (path === '/failed') return <Failed />;
   if (path === '/dashboard') return <Dashboard />;
-  if (path === '/users') return <Users />;
+  if (path === '/users') return <UserList />;
 
   return (
     <div>

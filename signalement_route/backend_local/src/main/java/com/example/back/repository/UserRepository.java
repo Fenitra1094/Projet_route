@@ -17,7 +17,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByEmail(String email);
 
     List<User> findBySyncedFalse();
-    Optional<User> findByFirebaseUid(String firebaseUid);
+    Optional<User> findByFirebaseDocId(String firebaseDocId);
     Optional<User> findByEmail(String email);
 
 }

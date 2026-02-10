@@ -38,10 +38,13 @@ public class AuthController {
 
     // Endpoint to manually trigger sync of offline users to Firebase
     @PostMapping("/sync")
-    @Operation(summary = "Synchroniser les utilisateurs hors ligne", description = "Synchronise manuellement les utilisateurs non synchronisés vers Firebase")
+    @Operation(
+        summary = "Synchroniser les utilisateurs hors ligne",
+        description = "Déclenche manuellement la synchronisation des utilisateurs créés localement mais non encore poussés vers Firebase Auth et Firestore"
+    )
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Synchronisation terminée"),
-        @ApiResponse(responseCode = "503", description = "Pas de connexion Internet")
+        @ApiResponse(responseCode = "200", description = "Synchronisation terminée avec succès"),
+        @ApiResponse(responseCode = "503", description = "Pas de connexion Internet disponible")
     })
     public ResponseEntity<?> syncOfflineUsers() {
         if (!NetworkUtil.hasInternetConnection()) {
@@ -59,7 +62,7 @@ public class AuthController {
             }
             try {
                 String firebaseUid = FirebaseUtils.register(u.getEmail(), u.getPassword());
-                u.setFirebaseUid(firebaseUid);
+                u.setFirebaseDocId(firebaseUid);
                 u.setSynced(true);
                 userRepository.save(u);
                 success++;
@@ -78,7 +81,13 @@ public class AuthController {
     // LOGIN
     // ======================
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest req) {
+    @Operation(summary = "Connexion utilisateur", description = "Authentifie un utilisateur via Firebase (en ligne) ou localement (hors ligne)")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Connexion réussie"),
+        @ApiResponse(responseCode = "401", description = "Identifiants invalides"),
+        @ApiResponse(responseCode = "404", description = "Utilisateur non trouvé localement")
+    })
+    public ResponseEntity<?> login(@Parameter(description = "Données de connexion") @RequestBody LoginRequest req) {
 
         // ===== MODE EN LIGNE (Firebase) =====
         if (NetworkUtil.hasInternetConnection()) {
@@ -88,7 +97,7 @@ public class AuthController {
                     req.getPassword()
                 );
 
-                return userRepository.findByFirebaseUid(firebaseUid)
+                return userRepository.findByFirebaseDocId(firebaseUid)
                         .<ResponseEntity<?>>map(ResponseEntity::ok)
                         .orElse(ResponseEntity.status(404)
                                 .body("Utilisateur non synchronisé localement"));
@@ -112,7 +121,13 @@ public class AuthController {
 
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody User user) {
+    @Operation(summary = "Inscription utilisateur", description = "Enregistre un nouvel utilisateur dans Firebase (en ligne) ou localement (hors ligne)")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Inscription réussie"),
+        @ApiResponse(responseCode = "400", description = "Utilisateur déjà existant ou données invalides"),
+        @ApiResponse(responseCode = "500", description = "Erreur lors de l'inscription")
+    })
+    public ResponseEntity<?> register(@Parameter(description = "Données de l'utilisateur à créer") @RequestBody User user) {
 
         // Vérifie si l'utilisateur existe déjà localement
         if (userRepository.findByEmail(user.getEmail()).isPresent()) {
@@ -128,7 +143,7 @@ public class AuthController {
                     String firebaseUid = FirebaseUtils.register(user.getEmail(), user.getPassword());
 
                           // Mise à jour de l'utilisateur pour PostgreSQL
-                          user.setFirebaseUid(firebaseUid);
+                          user.setFirebaseDocId(firebaseUid);
                           user.setSynced(true);
 
                 } catch (Exception e) {
@@ -156,7 +171,7 @@ public class AuthController {
             if (!savedUser.isSynced() && NetworkUtil.hasInternetConnection() && savedUser.getPassword() != null) {
                 try {
                     String firebaseUid = FirebaseUtils.register(savedUser.getEmail(), savedUser.getPassword());
-                    savedUser.setFirebaseUid(firebaseUid);
+                    savedUser.setFirebaseDocId(firebaseUid);
                     savedUser.setSynced(true);
                     userRepository.save(savedUser); // Mise à jour de PostgreSQL
                 } catch (Exception e) {
@@ -176,6 +191,11 @@ public class AuthController {
     
 
         @GetMapping("/users")
+        @Operation(summary = "Lister les utilisateurs Firebase", description = "Récupère tous les utilisateurs depuis Firebase")
+        @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Liste des utilisateurs Firebase récupérée"),
+            @ApiResponse(responseCode = "500", description = "Erreur Firebase")
+        })
         public ResponseEntity<?> getAllFirebaseUsers() {
             try {
                 List<ExportedUserRecord> users = firebaseUserService.listAllUsers();
@@ -187,6 +207,11 @@ public class AuthController {
         }
 
         @GetMapping("/users/postgres")
+        @Operation(summary = "Lister les utilisateurs PostgreSQL", description = "Récupère tous les utilisateurs depuis la base de données locale")
+        @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Liste des utilisateurs PostgreSQL récupérée"),
+            @ApiResponse(responseCode = "500", description = "Erreur PostgreSQL")
+        })
         public ResponseEntity<?> getAllPostgresUsers() {
             try {
                 List<User> users = userRepository.findAll();
@@ -198,6 +223,11 @@ public class AuthController {
         }
 
         @DeleteMapping("/firebase/users")
+        @Operation(summary = "Supprimer tous les utilisateurs Firebase", description = "Supprime tous les utilisateurs de Firebase (opération dangereuse)")
+        @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Tous les utilisateurs Firebase supprimés"),
+            @ApiResponse(responseCode = "500", description = "Erreur lors de la suppression")
+        })
     public ResponseEntity<?> deleteAllFirebaseUsers() {
         try {
             firebaseUserService.deleteAllUsers();
