@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: carte-migration
+
+  datasource:
+    # En Docker : utiliser le nom du service "postgres"
+    # En local : utiliser "localhost"
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/projetcloud
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:kanto}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: false
+
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: /api
+
+logging:
+  level:
+    root: INFO
+    com.example.cartemigration: DEBUG
