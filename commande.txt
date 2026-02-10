@@ -1,9 +1,0 @@
-docker start postgres_local
-
-docker exec -it postgres_local bash
-
-psql -U postgres
-CREATE DATABASE signalement;
-CREATE USER root ;
-GRANT ALL PRIVILEGES ON DATABASE signalement TO root;
-psql -U root -d signalement -h localhost -p 5432
