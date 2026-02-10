@@ -127,6 +127,7 @@ import L, { type LeafletMouseEvent } from 'leaflet';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { clearSession, logoutUser } from '@/services/LoginService';
+import { stopSignalementNotificationListener } from '@/services/NotificationService';
 import { initCarte, type CarteInstance } from '@/services/CarteService';
 import { getPhotosForSignalement } from '@/services/firebaseService';
 import {
@@ -397,6 +398,7 @@ onBeforeUnmount(() => {
 });
 
 const handleLogout = async () => {
+  stopSignalementNotificationListener();
   await logoutUser();
   clearSession();
   await router.replace('/login');

@@ -4,6 +4,7 @@ import Login from '@/views/Login.vue';
 import Carte from '@/views/Carte.vue';
 import Map from '@/views/Map.vue';
 import { clearSession, isSessionValid, logoutUser, startUserStatusListener } from '@/services/LoginService';
+import { startSignalementNotificationListener } from '@/services/NotificationService';
 
 const routes = [
   {
@@ -60,7 +61,10 @@ router.beforeEach(async (to, from, next) => {
   if (requiresAuth && user) {
     try {
       const parsed = JSON.parse(user);
-      if (parsed?.id_user) startUserStatusListener(Number(parsed.id_user));
+      if (parsed?.id_user) {
+        startUserStatusListener(Number(parsed.id_user));
+        startSignalementNotificationListener(Number(parsed.id_user));
+      }
     } catch {
       clearSession();
       next('/login');
