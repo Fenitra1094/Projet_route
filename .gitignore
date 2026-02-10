@@ -27,4 +27,3 @@ npm-debug.log*
 /route_app_mobile/platforms
 /route_app_mobile/plugins
 /route_app_mobile/www
-/route_app_mobile/.env
