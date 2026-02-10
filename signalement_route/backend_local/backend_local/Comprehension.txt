@@ -1,0 +1,14 @@
+Fonctionnement :
+-annonce des postes (Automatiquement)
+-postulation des CV (Manuellement)
+-annonce des resultats (Automatiquement)
+-validation des resultats pour l'entretien (Manuellement)
+-entretien d'embauche (????)
+
+Fonctionnalite :
+-affichage des CV,resultats, ...
+-recherche avancees (tri, classification)
+-CRUD (poste libre pour le travail)
+
+Base :
+
