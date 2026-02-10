@@ -1,0 +1,86 @@
+.blocked-container {
+  padding: 24px;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #222;
+  max-width: 920px;
+  margin: 24px auto;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(20,20,30,0.06);
+}
+
+.blocked-container h1 {
+  margin: 0 0 14px 0;
+  font-size: 20px;
+}
+
+.blocked-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.blocked-table thead th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #444;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.blocked-table tbody tr:nth-child(odd) {
+  background: #fbfbfb;
+}
+
+.blocked-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f3f3f3;
+  font-size: 14px;
+}
+
+.col-check {
+  width: 44px;
+}
+
+.actions {
+  margin-top: 14px;
+}
+
+.btn {
+  background: #1976d2;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn.btn-secondary {
+  background: #f5f6f8;
+  color: #333;
+  margin-left: 8px;
+  border: 1px solid #e3e6ea;
+}
+
+.message {
+  margin-bottom: 12px;
+  color: #b00020;
+  background: #fff5f6;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+
+.loading {
+  color: #666;
+}
+
+.empty {
+  color: #666;
+  padding: 8px 0;
+}
