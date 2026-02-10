@@ -7,6 +7,7 @@ D:\S5\Web Avance\cloud\Projet_route\backend_local\src\main\java\com\example\back
 D:\S5\Web Avance\cloud\Projet_route\backend_local\src\main\java\com\example\back\controller\UserController.java
 D:\S5\Web Avance\cloud\Projet_route\backend_local\src\main\java\com\example\back\repository\QuartierRepository.java
 D:\S5\Web Avance\cloud\Projet_route\backend_local\src\main\java\com\example\back\util\FirebaseUtils.java
+D:\S5\Web Avance\cloud\Projet_route\backend_local\src\main\java\com\example\back\config\SwaggerConfig.java
 D:\S5\Web Avance\cloud\Projet_route\backend_local\src\main\java\com\example\back\service\FirebaseService.java
 D:\S5\Web Avance\cloud\Projet_route\backend_local\src\main\java\com\example\back\dto\SignalementParArrondissementDto.java
 D:\S5\Web Avance\cloud\Projet_route\backend_local\src\main\java\com\example\back\repository\ProvinceRepository.java

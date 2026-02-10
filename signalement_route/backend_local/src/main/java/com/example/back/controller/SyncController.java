@@ -5,18 +5,28 @@ import com.example.back.service.FirebaseService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/sync")
 @CrossOrigin
+@Tag(name = "Synchronisation", description = "API de synchronisation entre PostgreSQL et Firebase")
 public class SyncController {
     
     @Autowired
     private FirebaseService firebaseService;
     
     @PostMapping("/to-firebase")
+    @Operation(summary = "Synchroniser vers Firebase", description = "Synchronise toutes les données locales vers Firebase")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Synchronisation vers Firebase réussie"),
+        @ApiResponse(responseCode = "500", description = "Erreur lors de la synchronisation")
+    })
     public ResponseEntity<String> syncToFirebase() {
         try {
             firebaseService.syncAllToFirebase();
@@ -28,6 +38,11 @@ public class SyncController {
     }
     
     @PostMapping("/from-firebase")
+    @Operation(summary = "Synchroniser depuis Firebase", description = "Synchronise toutes les données Firebase vers la base locale")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Synchronisation depuis Firebase réussie"),
+        @ApiResponse(responseCode = "500", description = "Erreur lors de la synchronisation")
+    })
     public ResponseEntity<String> syncFromFirebase() {
         try {
             firebaseService.syncAllFromFirebase();
@@ -39,6 +54,11 @@ public class SyncController {
     }
     
     @PostMapping("/full")
+    @Operation(summary = "Synchronisation complète", description = "Effectue une synchronisation bidirectionnelle complète")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Synchronisation complète réussie"),
+        @ApiResponse(responseCode = "500", description = "Erreur lors de la synchronisation complète")
+    })
     public ResponseEntity<String> fullSync() {
         try {
             firebaseService.syncAllToFirebase();
@@ -51,6 +71,11 @@ public class SyncController {
     }
     
     @GetMapping("/status")
+    @Operation(summary = "Statut de synchronisation", description = "Récupère le statut actuel de la synchronisation")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Statut de synchronisation récupéré"),
+        @ApiResponse(responseCode = "500", description = "Erreur lors de la récupération du statut")
+    })
     public ResponseEntity<Map<String, Object>> getSyncStatus() {
         try {
             Map<String, Object> status = firebaseService.getSyncStatus();
@@ -61,6 +86,11 @@ public class SyncController {
     }
     
     @PostMapping("/signalements/to-firebase")
+    @Operation(summary = "Synchroniser les signalements vers Firebase", description = "Synchronise uniquement les signalements vers Firebase")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Signalements synchronisés avec succès"),
+        @ApiResponse(responseCode = "500", description = "Erreur lors de la synchronisation des signalements")
+    })
     public ResponseEntity<String> syncSignalementsToFirebase() {
         try {
             firebaseService.syncSignalementsToFirebase();

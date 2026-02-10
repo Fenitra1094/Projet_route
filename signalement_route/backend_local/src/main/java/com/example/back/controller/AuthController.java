@@ -10,11 +10,17 @@ import org.springframework.scheduling.annotation.Scheduled;
 import com.example.back.util.*;
 import com.google.firebase.auth.ExportedUserRecord;
 import com.example.back.dto.LoginRequest;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 
 @RestController
 @RequestMapping("/auth")
 @CrossOrigin
+@Tag(name = "Authentification", description = "API d'authentification et de gestion des utilisateurs")
 public class AuthController {
 
     private final UserRepository userRepository;
@@ -32,6 +38,11 @@ public class AuthController {
 
     // Endpoint to manually trigger sync of offline users to Firebase
     @PostMapping("/sync")
+    @Operation(summary = "Synchroniser les utilisateurs hors ligne", description = "Synchronise manuellement les utilisateurs non synchronisés vers Firebase")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Synchronisation terminée"),
+        @ApiResponse(responseCode = "503", description = "Pas de connexion Internet")
+    })
     public ResponseEntity<?> syncOfflineUsers() {
         if (!NetworkUtil.hasInternetConnection()) {
             return ResponseEntity.status(503).body("Pas de connexion Internet");

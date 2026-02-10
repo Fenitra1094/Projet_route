@@ -26,6 +26,7 @@ com\example\back\util\FirebaseUtils.class
 com\example\back\controller\UserController.class
 com\example\back\GestionApplication.class
 com\example\back\repository\RoleRepository.class
+com\example\back\config\SwaggerConfig.class
 com\example\back\dto\LoginRequest.class
 com\example\back\service\FirebaseService.class
 com\example\back\models\Province.class
