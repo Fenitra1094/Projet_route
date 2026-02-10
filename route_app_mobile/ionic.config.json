@@ -1,0 +1,7 @@
+{
+  "name": "RouteApp",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "vue-vite"
+}
